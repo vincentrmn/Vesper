@@ -30,26 +30,31 @@ type ParseResult = { value: number; period: string };
 // Parsing DÉFENSIF : on cherche la ligne "Luxembourg" et la colonne "appartements
 // existants / ancien — prix moyen €/m²" par LIBELLÉ (jamais par index). Renvoie
 // null proprement si introuvable (le caller bascule en fallback).
+// Détecte la ligne d'en-tête (col0 = "Commune") et la 1re colonne "prix moyen au m²"
+// (= appartements EXISTANTS ; la colonne VEFA vient après). Le mot "existant" est
+// dans une ligne de section fusionnée, pas dans l'en-tête de colonne — d'où la
+// détection par "Commune" + 1er "prix moyen".
+function findHeader(rows: any[]): { headerRow: number; col: number } | null {
+  for (let r = 0; r < Math.min(rows.length, 14); r++) {
+    const row = rows[r] || [];
+    if (String(row[0] ?? "").trim().toLowerCase() !== "commune") continue;
+    for (let c = 1; c < row.length; c++) {
+      const cell = String(row[c] ?? "").toLowerCase();
+      if (/prix\s*moyen|moyen.*m|au\s*m²|au\s*m2/.test(cell)) return { headerRow: r, col: c };
+    }
+  }
+  return null;
+}
+
 function parseActesVille(wb: XLSX.WorkBook, period: string): ParseResult | null {
   for (const name of wb.SheetNames) {
     const ws = wb.Sheets[name];
     const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false });
     if (!rows.length) continue;
 
-    // 1) Colonne cible : header mentionnant (existant|ancien) ET (moyen|m²|m2|prix).
-    let col = -1;
-    for (let r = 0; r < Math.min(rows.length, 8); r++) {
-      const row = rows[r] || [];
-      for (let cI = 0; cI < row.length; cI++) {
-        const cell = String(row[cI] ?? "").toLowerCase();
-        if (/existant|ancien/.test(cell) && /(moyen|m²|m2|prix)/.test(cell)) {
-          col = cI;
-          break;
-        }
-      }
-      if (col >= 0) break;
-    }
-    if (col < 0) continue;
+    const h = findHeader(rows);
+    if (!h) continue;
+    const col = h.col;
 
     // 2) Ligne Luxembourg (commune exacte, on évite "Luxembourg-...").
     for (const row of rows) {
@@ -193,19 +198,9 @@ function parseAllCommunes(wb: XLSX.WorkBook): { commune: string; value: number }
     const ws = wb.Sheets[name];
     const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false });
     if (!rows.length) continue;
-    let col = -1;
-    for (let r = 0; r < Math.min(rows.length, 8); r++) {
-      const row = rows[r] || [];
-      for (let cI = 0; cI < row.length; cI++) {
-        const cell = String(row[cI] ?? "").toLowerCase();
-        if (/existant|ancien/.test(cell) && /(moyen|m²|m2|prix)/.test(cell)) {
-          col = cI;
-          break;
-        }
-      }
-      if (col >= 0) break;
-    }
-    if (col < 0) continue;
+    const h = findHeader(rows);
+    if (!h) continue;
+    const col = h.col;
     for (const row of rows) {
       const label = String(row[0] ?? "").trim();
       if (!label || /total|commune|source|moyenne|pays|canton/i.test(label)) continue;
