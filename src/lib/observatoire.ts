@@ -8,6 +8,23 @@ const DATASET_URL =
 const NINE_MONTHS_MS = 9 * 30 * 24 * 3600 * 1000;
 export const FALLBACK_DECOTE = 0.065;
 
+// data.public.lu (API v2) : `resources` peut être un tableau OU une sous-section
+// paginée { href }. On résout vers le tableau réel des ressources.
+async function resolveResources(): Promise<any[]> {
+  const meta = await fetch(DATASET_URL, { headers: { Accept: "application/json" } });
+  if (!meta.ok) return [];
+  const j: any = await meta.json();
+  const rs = j?.resources;
+  if (Array.isArray(rs)) return rs;
+  if (rs && typeof rs.href === "string") {
+    const sub = await fetch(rs.href, { headers: { Accept: "application/json" } });
+    if (!sub.ok) return [];
+    const sj: any = await sub.json();
+    return Array.isArray(sj?.data) ? sj.data : Array.isArray(sj) ? sj : [];
+  }
+  return [];
+}
+
 type ParseResult = { value: number; period: string };
 
 // Parsing DÉFENSIF : on cherche la ligne "Luxembourg" et la colonne "appartements
@@ -50,14 +67,11 @@ function parseActesVille(wb: XLSX.WorkBook, period: string): ParseResult | null 
 /** Télécharge le dernier xlsx Observatoire si plus récent, parse et stocke. */
 export async function fetchActesVille(): Promise<{ updated: boolean; value?: number; period?: string; error?: string }> {
   try {
-    const meta = await fetch(DATASET_URL, { headers: { Accept: "application/json" } });
-    if (!meta.ok) return { updated: false, error: `dataset ${meta.status}` };
-    const j: any = await meta.json();
-    const resources: any[] = Array.isArray(j?.resources) ? j.resources : [];
+    const resources = await resolveResources();
     const xlsxRes = resources.filter(
-      (r) => /xlsx/i.test(r?.format || "") || /\.xlsx(\?|$)/i.test(r?.url || "")
+      (r: any) => /xlsx?/i.test(r?.format || "") || /\.xlsx?(\?|$)/i.test(r?.url || "")
     );
-    if (!xlsxRes.length) return { updated: false, error: "aucune ressource xlsx" };
+    if (!xlsxRes.length) return { updated: false, error: "aucune ressource tableur" };
     xlsxRes.sort(
       (a, b) => new Date(b.last_modified || 0).getTime() - new Date(a.last_modified || 0).getTime()
     );
@@ -215,14 +229,11 @@ function parseAllCommunes(wb: XLSX.WorkBook): { commune: string; value: number }
 /** Télécharge le xlsx et stocke le prix SIGNÉ par commune (dataset `commune:<slug>`). */
 export async function fetchActesAllCommunes(): Promise<{ updated: boolean; communes?: number; period?: string; error?: string }> {
   try {
-    const meta = await fetch(DATASET_URL, { headers: { Accept: "application/json" } });
-    if (!meta.ok) return { updated: false, error: `dataset ${meta.status}` };
-    const j: any = await meta.json();
-    const resources: any[] = Array.isArray(j?.resources) ? j.resources : [];
+    const resources = await resolveResources();
     const xlsxRes = resources.filter(
-      (r) => /xlsx/i.test(r?.format || "") || /\.xlsx(\?|$)/i.test(r?.url || "")
+      (r: any) => /xlsx?/i.test(r?.format || "") || /\.xlsx?(\?|$)/i.test(r?.url || "")
     );
-    if (!xlsxRes.length) return { updated: false, error: "aucune ressource xlsx" };
+    if (!xlsxRes.length) return { updated: false, error: "aucune ressource tableur" };
     xlsxRes.sort((a, b) => new Date(b.last_modified || 0).getTime() - new Date(a.last_modified || 0).getTime());
     const res = xlsxRes[0];
     const resourceModified = res.last_modified ? new Date(res.last_modified) : null;
