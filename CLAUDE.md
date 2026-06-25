@@ -135,23 +135,24 @@ Pour une recherche (commune + critères), produire :
 Le fork du code est fait et **buildable** (`npm run build` passe). Détail complet dans `docs/fork-status.md` et déploiement dans `docs/DEPLOY.md`.
 
 **Code (repo, branche `main` + `claude/relaxed-albattani-wrid7z`, synchronisées) :**
-- Plomberie reprise de scout puis dépouillée : `db.ts` (schéma réduit : configs · runs · zones · listings · listing_snapshots · market_samples · observatoire_data), `dedup.ts` (tel quel), `observatoire.ts` (tel quel), `zones.ts` (geo + `quartierSlug`), `types.ts` (`Listing` + `Comparable`), `trigger.ts` (atHome + Immotop).
-- `/api/ingest` : upsert + snapshots + **dédup cross-source au niveau du run** → comparables (€/m²). Pas de scoring/verdict/findings/proposals.
-- UI : dashboard, formulaire de recherche, page run = **tableau de comparables + distribution €/m²** (min/P25/médiane/P75/max). CSS maison de scout réutilisée.
-- Amorce géo : **seul Lux-Ville** (26 quartiers) est seedé. Le **seed national** (§4) reste à faire (le gros morceau ; méthode : étude + test avant de coder).
+- Plomberie reprise de scout puis dépouillée : `db.ts`, `dedup.ts`, `observatoire.ts`, `zones.ts`, `types.ts` (`Listing` + `Comparable`), `trigger.ts` (atHome + Immotop, passe `communeNames` à immotop).
+- `/api/ingest` : upsert + snapshots + **dédup cross-source au niveau du run** → comparables (€/m²). Source-aware (`source:immotop`, id préfixé). Pas de scoring/verdict.
+- **Features livrées (batch 25/06)** : photos en dépliant (`PhotoStrip` repris de BBIscout) + description + **mots-clés** (`lib/keywords.ts`) ; biens **vendus/sous compromis** inclus + badgés (`listings.market_status`) ; **inclure/exclure** un comparable de l'étude (`runs.excluded_ids`, `/api/runs/exclude`) → distribution recalculée ; **lecture marché** (`/api/estimate`) = écart affiché→signé + fourchette + confiance.
+- **Seed géo national FAIT** : `/api/admin/seed-geo` (énum. BFS de l'API suggest atHome, hors-ligne) → **888 zones** (229 communes + 632 localités). ZonePicker a un champ de recherche.
+- **Observatoire par commune** : `observatoire.ts` `fetchActesAllCommunes` (data.public.lu, dataset `commune:<slug>`) + `/api/admin/fetch-observatoire` (secret). ⚠️ data.public.lu v2 : `resources` paginées via `href`, fichiers `xls`.
 
-**Scraper n8n — PROPRE à Vesper (ne PAS réutiliser celui de BBIscout) :**
-- Workflow **`Vesper — atHome scraper`**, id **`FvcGpXuWSlMbNDEf`**, webhook path **`vesper-search`**, sur la même instance n8n (`n8n-production-8929d.up.railway.app`). Publié et **testé en isolation** (scrape réel OK).
-- C'est un clone dédié du scraper atHome (mêmes nodes : Scrape SRP paginé → fiche détail CPE → filtre → agrège → POST `/api/ingest`). Contrat de sortie `{runId, secret, listings, stats}` = ce qu'attend `/api/ingest`.
-- `N8N_WEBHOOK_URL` doit pointer sur `https://n8n-production-8929d.up.railway.app/webhook/vesper-search`.
-- Scraper **Immotop** : pas encore créé (à faire, api-next `search-list/listings`, cf. `docs/immotop-source2-etude.md`), variable `N8N_IMMOTOP_WEBHOOK_URL` vide pour l'instant → Immotop ignoré silencieusement.
+**Scrapers n8n — PROPRES à Vesper (ne PAS réutiliser ceux de BBIscout) :**
+- **`Vesper — atHome scraper`**, id **`FvcGpXuWSlMbNDEf`**, webhook **`vesper-search`**. SRP paginé → fiche détail CPE → POST `/api/ingest`. Inclut les vendus (flag `marketStatus`). → `N8N_WEBHOOK_URL`.
+- **`Vesper — Immotop scraper`**, id **`zicBduU8x89HnZOD`**, webhook **`vesper-immotop`**. api-next : géo par `geography/autocomplete` (par commune), pagination `search-list/listings` (**param `path=/vente-appartements/<commune>/` REQUIS** + Referer correspondant), normalisation Listing (photos `xxl`, `etat` ga4Condition, pas de CPE), POST `source:immotop`. v1 **appartements**. → `N8N_IMMOTOP_WEBHOOK_URL`.
+- ⚠️ **L'api-next immotop a dérivé depuis l'étude de juin** : les params seuls 500ent ; il faut le param `path` + le `Referer` de la même page. Source SDK des deux dans `n8n/`.
 
 **Déploiement Railway — FAIT (live le 25/06/2026) :**
 - **URL : https://vesper-production-d0b8.up.railway.app** — testée end-to-end (recherche → scrape → ingest → comparables OK, run #1 = 18 comps).
 - Projet `Vesper` (`eb8ed587-8da4-4835-8dde-4c5a55a03176`), workspace perso (`14f4e15d-…`), env `production` (`d176e079-…`).
 - Service **`vesper`** (Next, depuis GitHub `vincentrmn/Vesper` branche `main`, auto-deploy) + domaine ci-dessus.
 - Service **`Postgres`** (image `ghcr.io/railwayapp-templates/postgres-ssl:16`) + volume `/var/lib/postgresql/data`. `DATABASE_URL` du service référencé par l'app via `${{Postgres.DATABASE_URL}}`.
-- Variables app posées : `DATABASE_URL`, `INGEST_SECRET`, `N8N_WEBHOOK_URL` (→ `vesper-search`), `PGSSL=require` (image SSL), `PUBLIC_APP_URL`. `N8N_IMMOTOP_WEBHOOK_URL` non posée (Immotop off).
-- ⚠️ Le pilotage Railway depuis Claude n'a marché qu'**en GraphQL direct** (`backboard.railway.com`, token Bearer). La **CLI et le MCP Railway** rejettent ce token (workspace token, user-scoped → `me` refusé). Et il faut que l'environnement Claude **autorise l'egress vers `backboard.railway.com`** (sinon 403 policy denial).
+- Variables app posées : `DATABASE_URL`, `INGEST_SECRET`, `N8N_WEBHOOK_URL` (→ `vesper-search`), `N8N_IMMOTOP_WEBHOOK_URL` (→ `vesper-immotop`), `PGSSL=require`, `PUBLIC_APP_URL`.
+- ⚠️ Pilotage Railway depuis Claude **uniquement en GraphQL direct** (`backboard.railway.com`, `Authorization: Bearer <token>`). La CLI/MCP Railway rejettent ce token (workspace token, user-scoped). L'environnement Claude doit **autoriser l'egress vers `backboard.railway.com`**.
+- **Routes admin (one-shot, secret = `INGEST_SECRET`)** : `POST /api/admin/seed-geo {secret,towns[]}` (re-seed géo) ; `POST /api/admin/fetch-observatoire {secret}` (réimport Observatoire).
 
-**Prochaines étapes (ordre) :** 1) **garde-fou comparables aberrants** (run #1 a sorti un « 1 m² à 525 000 €/m² » : plancher surface ~10–15 m² + plafond €/m² vs réf Observatoire) — cohérent avec §0/§5 ; 2) seed géo national (§4) ; 3) scraper Immotop ; 4) Phase 2 couche Observatoire (décote affiché→signé + fourchette + confiance).
+**Prochaines étapes (ordre) :** 1) **garde-fou comparables aberrants** (plancher surface ~10–15 m² + plafond €/m² vs réf Observatoire) — cohérent §0/§5 ; 2) dédup **référentielle** immotop↔atHome dans `listings` (aujourd'hui dédup au niveau du run seulement) ; 3) immotop **maisons** (idCategoria + path `vente-maisons`) ; 4) localités immotop (autocomplete à la maille localité) ; 5) cron de réimport Observatoire.
