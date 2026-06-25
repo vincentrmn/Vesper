@@ -113,9 +113,10 @@ export async function POST(req: NextRequest) {
         const photos = Array.isArray(l.photos)
           ? l.photos.filter((p) => typeof p === "string" && p.startsWith("http")).slice(0, 6)
           : [];
+        const marketStatus = (l as any).marketStatus === "sold" ? "sold" : "active";
         return pool.query(
-          `INSERT INTO listings (id, source, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address, etat)
-           VALUES ($1, $13, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $14)
+          `INSERT INTO listings (id, source, price, surface, commune, rooms, title, url, cpe, photos, lat, lng, address, etat, market_status)
+           VALUES ($1, $13, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $14, $15)
            ON CONFLICT (id) DO UPDATE SET
              last_seen  = now(),
              prev_price = CASE WHEN listings.price <> EXCLUDED.price THEN listings.price ELSE listings.prev_price END,
@@ -130,9 +131,10 @@ export async function POST(req: NextRequest) {
              lat     = COALESCE(EXCLUDED.lat, listings.lat),
              lng     = COALESCE(EXCLUDED.lng, listings.lng),
              etat    = COALESCE(EXCLUDED.etat, listings.etat),
+             market_status = EXCLUDED.market_status,
              address = CASE WHEN EXCLUDED.address IS NOT NULL AND EXCLUDED.address <> '' THEN EXCLUDED.address ELSE listings.address END`,
           [l.id, l.price, l.surface ?? null, l.commune ?? null, l.rooms ?? null, l.title ?? null, l.url, l.cpe ?? null, JSON.stringify(photos),
-           typeof l.lat === "number" ? l.lat : null, typeof l.lng === "number" ? l.lng : null, l.address ?? null, sourceTag, (l as any).etat ?? null]
+           typeof l.lat === "number" ? l.lat : null, typeof l.lng === "number" ? l.lng : null, l.address ?? null, sourceTag, (l as any).etat ?? null, marketStatus]
         );
       })
     );

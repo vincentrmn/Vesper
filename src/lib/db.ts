@@ -61,6 +61,8 @@ export function ensureSchema(): Promise<void> {
       //   NULL  => run mono-source : finalisé au 1er POST.
       //   >=1   => chaque POST fusionne ses biens + décrémente ; 'done' à 0.
       await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS sources_pending INTEGER;`);
+      // Inclure/exclure des comparables de l'étude : ids exclus de la distribution.
+      await pool.query(`ALTER TABLE runs ADD COLUMN IF NOT EXISTS excluded_ids JSONB NOT NULL DEFAULT '[]';`);
 
       // -------------------------------------------------------------------
       // Zones — géographie. Hérité de BBIscout : Lux-Ville + 26 quartiers comme
@@ -82,6 +84,9 @@ export function ensureSchema(): Promise<void> {
           created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
         );
       `);
+      // Coordonnées du centre de la zone (seed géo national via API suggest atHome).
+      await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
+      await pool.query(`ALTER TABLE zones ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
 
       const { rows } = await pool.query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM zones`);
       if (rows[0].n === 0) {
@@ -164,6 +169,8 @@ export function ensureSchema(): Promise<void> {
       await pool.query(
         `CREATE INDEX IF NOT EXISTS listings_dedup_idx ON listings (price) WHERE lat IS NOT NULL AND lng IS NOT NULL;`
       );
+      // Statut marché : 'active' | 'sold' (vendu / sous compromis, atHome isSoldProperty).
+      await pool.query(`ALTER TABLE listings ADD COLUMN IF NOT EXISTS market_status TEXT NOT NULL DEFAULT 'active';`);
 
       // Historique de prix : une ligne quand bien nouveau OU prix changé.
       await pool.query(`

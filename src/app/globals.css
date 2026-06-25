@@ -525,3 +525,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .pd-kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; margin: 0; }
 .pd-kv dt { color: var(--ink-soft); }
 .pd-kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* Mots-clés extraits de la description (runs/[id]) — couleur par catégorie. */
+.chip.kw-etat { background: var(--green-soft); color: var(--green-ink); border-color: transparent; }
+.chip.kw-occupation { background: #e7eefc; color: #1f4ea1; border-color: transparent; }
+.chip.kw-statut { background: #fde2e2; color: #a12020; border-color: transparent; }
+.chip.kw-environnement { background: #eaf6ec; color: #2f7d42; border-color: transparent; }
+.chip.kw-atout { background: var(--paper-2); color: var(--ink-soft); border-color: var(--line); }

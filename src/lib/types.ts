@@ -20,6 +20,8 @@ export type Listing = {
   description?: string | null;
   /** État de rénovation (immotop : ga4Condition ; atHome : absent). */
   etat?: "a_renover" | "habitable" | "renove" | null;
+  /** Statut marché : 'sold' = vendu / sous compromis (atHome isSoldProperty). */
+  marketStatus?: "active" | "sold";
 };
 
 /**
