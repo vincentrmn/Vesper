@@ -160,4 +160,34 @@ Le fork du code est fait et **buildable** (`npm run build` passe). Détail compl
 - ⚠️ Pilotage Railway depuis Claude **uniquement en GraphQL direct** (`backboard.railway.com`, `Authorization: Bearer <token>`). La CLI/MCP Railway rejettent ce token (workspace token, user-scoped). L'environnement Claude doit **autoriser l'egress vers `backboard.railway.com`**.
 - **Routes admin (one-shot, secret = `INGEST_SECRET`)** : `POST /api/admin/seed-geo {secret,towns[]}` (re-seed géo) ; `POST /api/admin/fetch-observatoire {secret}` (réimport Observatoire).
 
-**Prochaines étapes (ordre) :** 1) **garde-fou comparables aberrants** (plancher surface ~10–15 m² + plafond €/m² vs réf Observatoire) — cohérent §0/§5 ; 2) dédup **référentielle** immotop↔atHome dans `listings` (aujourd'hui dédup au niveau du run seulement) ; 3) immotop **maisons** (idCategoria + path `vente-maisons`) ; 4) localités immotop (autocomplete à la maille localité) ; 5) cron de réimport Observatoire.
+### Sprint 1 — session du 25/06/2026 (fixes & design, tout livré + déployé)
+
+**Scrapers / données (n8n live patchés + publiés, sources SDK sync) :**
+- **atHome recherche à 0 résultat ne plante plus** (#1143) : `GET fiche detail` en `onError:continueRegularOutput` + `Extrait CPE` détecte le sentinelle `_empty` via l'item source apparié → run finalisé `done`.
+- **atHome NEUF (`newOnly`)** : on ne re-filtre plus sur `a.isNewBuild` (flag non fiable, ~50 % faux) — l'URL `new_build=true` suffit. Avant : `totalAtHome>0` mais 0 gardé.
+- **Tokens commune L9→L7** (cf. ci-dessus) : 101 communes corrigées.
+- **Immotop type de bien** : filtre réel = `idTipologia` (4/5 appart, 7/12 maison), plus `idCategoria`/`path`. Fini les maisons en recherche appartements.
+- **Immotop état** : filtré **côté scraper** sur `ga4Condition` + `criteria.conditions` (pas de param serveur). Filtre énergie immotop **retiré** (donnée absente).
+- **Ingest robuste** : coercition `rooms`/prix/surface + `Promise.allSettled` (plus de 500 sur donnée sale).
+- **Dédup niveau 2** (`lib/dedup.ts`) : prix+surface quasi identiques → fusion jusqu'à 800 m (géocodage cross-portail divergent).
+
+**App / UX :**
+- **Carte « Analyse » refaite** : chemin Affiché → décote → Signé + 2 encarts en vraies phrases (lecture + « d'où vient la confiance », `confParts` exposé par `/api/estimate`).
+- **Export** : logos Excel/PDF + barre de chargement.
+- **Trigger** : Immotop **non interrogé si `newOnly`** (ne sait pas filtrer le neuf) ; passe `conditions` (plus `statoIds`/`energyId`).
+- **Mobile** : carte de comparable réordonnée (titre puis « Inclure » labellisée), options export empilées, étiquettes de distribution dégroupées.
+
+**Design « BBI tools » (base posée) :**
+- Système `.ds-*` dense pro dans `globals.css` + vitrine **`/style`** (additif, aucune page migrée). Doc de référence : **`docs/BBI-tools-design.md`**.
+- Outils branchés : skill **ui-ux-pro-max** (actif) + MCP **magic** 21st.dev (à charger au redémarrage). Décisions : CSS maison + primitives, Vesper d'abord, dense pro clair, accent vert BBI.
+
+### Roadmap (priorisée — validée Vincent 25/06)
+
+1. **🔎 Creuser Immotop (incohérences persistantes)** — l'audit api-next a réglé type/état/énergie, mais Vincent voit encore des écarts. Reprendre une passe de vérif sur données réelles.
+2. **📍 Localité (gros écart de précision)** — atHome respecte la **localité** (ex. `loc=L9-aspelt` → Aspelt seul), mais le scraper Immotop résout la géo via `geography/autocomplete` au **niveau commune** (type 2 = Frisange) → il ramène **toute la commune** au lieu d'Aspelt. À corriger : faire résoudre Immotop à la **maille localité** (autocomplete type 3, ex. Aspelt id 1974 keyurl `aspelt`) et passer la localité, pas seulement le nom de commune. (Le trigger envoie aujourd'hui `communeNames`, pas la localité.)
+3. **🏷️ Immotop « Rénové » ET « Neuf » sur le même bien (NON réglé)** — `mapEtat` traduit `"Nuovo / In costruzione"` (= neuf) en **`renove`**, et le mot « neuf » du titre déclenche en plus le tag **Neuf** (`lib/keywords.ts`) → double badge contradictoire. Fix : mapper « Nuovo / In costruzione » vers un état **neuf** distinct (ou `null`), pas `renove` ; harmoniser état vs tag Neuf.
+4. **⚡ CPE / énergie Immotop** — absent de l'api-next liste (étude faite). À régler : tenter la **fiche détail** (mur anti-bot, cf. §6) pour récupérer le CPE, ou acter définitivement l'absence et l'assumer dans l'UI. Décider la stratégie.
+5. **🎨 BBI tools design** — session dédiée (voir `docs/BBI-tools-design.md`) : finaliser les primitives puis migrer les écrans Vesper, puis porter sur BBIscout.
+6. **Garde-fou comparables aberrants** (plancher surface ~10–15 m² + plafond €/m² vs réf Observatoire) — §0/§5.
+7. **Dédup référentielle** immotop↔atHome dans `listings` (aujourd'hui au niveau du run seulement).
+8. **Cron de réimport Observatoire**.
