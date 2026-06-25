@@ -566,7 +566,9 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .analyse-k { font-size: var(--ds-fs-xs); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--ds-ink-soft); }
 
 /* Barre de distribution des €/m². */
-.dist-bar { position: relative; height: 8px; border-radius: var(--ds-r-pill); background: var(--ds-bg-sunken); margin: 0 6px; }
+/* marginBottom réserve la hauteur des labels (positionnés en absolu) pour que
+   le contenu suivant (légende, moyennes) ne se superpose pas à eux. */
+.dist-bar { position: relative; height: 8px; border-radius: var(--ds-r-pill); background: var(--ds-bg-sunken); margin: 0 6px 40px; }
 .dist-iqr { position: absolute; top: 0; bottom: 0; background: var(--ds-accent-soft); border-radius: var(--ds-r-pill); }
 .dist-tick { position: absolute; top: -3px; bottom: -3px; width: 3px; background: var(--ds-accent-ink); border-radius: 2px; transform: translateX(-1px); }
 .dist-lab { position: absolute; top: 14px; transform: translateX(-50%); text-align: center; white-space: nowrap; }

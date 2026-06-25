@@ -216,7 +216,7 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
           </div>
 
           {/* Moyennes. */}
-          <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 48 }}>
+          <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 22 }}>
             {[
               { label: "Surface moyenne", v: avg(sv), suf: " m²", eur: false },
               { label: "Prix moyen", v: avg(pv), suf: "", eur: true },
