@@ -13,6 +13,17 @@ export const DEDUP_MAX_DISTANCE_M = 150;
 export const DEDUP_SURFACE_TOL_M2 = 2;
 export const DEDUP_PRICE_TOL_PCT = 0.03;
 
+// Niveau 2 — signal FORT : prix ET surface quasi identiques. Les deux portails
+// géocodent souvent différemment (immotop tombe parfois sur le centre commune,
+// atHome sur l'adresse) → jusqu'à quelques centaines de mètres d'écart pour le
+// MÊME bien. Quand prix+surface coïncident à ce point, on tolère une distance
+// plus large (mais bornée au même secteur) pour ne pas rater le doublon.
+// Cas réel : maison 800 m² à 4 850 000 € listée sur les 2 sites, géocodée à
+// ~260 m d'écart → ratée par le niveau 1 (seuil 150 m).
+export const DEDUP_STRONG_DISTANCE_M = 800;
+export const DEDUP_STRONG_SURFACE_TOL_M2 = 1;
+export const DEDUP_STRONG_PRICE_TOL_PCT = 0.01;
+
 export type DedupCandidate = {
   id: string;
   price: number | null;
@@ -49,14 +60,26 @@ export function haversineMeters(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** True si `c` et `t` satisfont les trois tolérances (géo + surface + prix). */
+/**
+ * True si `c` et `t` désignent le même bien physique. Deux niveaux :
+ *  - Niveau 1 : proximité serrée (≤150 m) + tolérances usuelles (surface ±2 m²,
+ *    prix ±3 %).
+ *  - Niveau 2 : prix ET surface quasi identiques (surface ±1 m², prix ±1 %) →
+ *    on accepte une distance plus large (≤800 m) pour rattraper les divergences
+ *    de géocodage cross-portail.
+ * Dans les deux cas la lat/lng des deux côtés est requise (clé maîtresse).
+ */
 export function isSameProperty(c: DedupTarget, t: DedupTarget): boolean {
   if (c.price == null || t.price == null || c.surface == null || t.surface == null) return false;
   const dist = haversineMeters(c.lat, c.lng, t.lat, t.lng);
-  if (dist == null || dist > DEDUP_MAX_DISTANCE_M) return false;
-  if (Math.abs(c.surface - t.surface) > DEDUP_SURFACE_TOL_M2) return false;
+  if (dist == null) return false;
+  const dSurf = Math.abs(c.surface - t.surface);
   const dP = Math.abs(c.price - t.price) / Math.max(c.price, t.price);
-  return dP <= DEDUP_PRICE_TOL_PCT;
+  // Niveau 1 — proximité serrée + tolérances normales.
+  if (dist <= DEDUP_MAX_DISTANCE_M && dSurf <= DEDUP_SURFACE_TOL_M2 && dP <= DEDUP_PRICE_TOL_PCT) return true;
+  // Niveau 2 — signal fort (prix+surface quasi identiques), distance élargie.
+  if (dist <= DEDUP_STRONG_DISTANCE_M && dSurf <= DEDUP_STRONG_SURFACE_TOL_M2 && dP <= DEDUP_STRONG_PRICE_TOL_PCT) return true;
+  return false;
 }
 
 export type DedupResult =

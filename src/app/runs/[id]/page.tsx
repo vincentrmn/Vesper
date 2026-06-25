@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState } from "react";
 import PhotoStrip from "@/components/PhotoStrip";
 import { extractKeywords, extractSurfaces } from "@/lib/keywords";
 import { exportPdf, exportExcel, type ExportComparable, type ExportAnalysis } from "@/lib/exportRun";
+import { ExcelIcon, PdfIcon } from "@/components/ExportIcons";
 
 type Comparable = {
   id: string;
@@ -79,6 +80,13 @@ type Estimate = {
   estimate?: { low: number; median: number; high: number };
   confidence?: number;
   confLabel?: string;
+  confParts?: {
+    nComps: number;
+    sizeLabel: string;
+    spreadPct: number;
+    dispLabel: string;
+    hasSigned: boolean;
+  };
 };
 
 const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
@@ -89,8 +97,8 @@ function confColor(label?: string): string {
   return "#a12020";
 }
 
-/** Carte « Analyse » unifiée et graphique : fourchette d'estimation + barre de
- *  distribution €/m² + moyennes + réf. Observatoire. Détails repliables. */
+/** Carte « Analyse » : le chemin Affiché → décote → Signé en clair, puis
+ *  distribution, moyennes, et deux encarts explicatifs (lecture + confiance). */
 function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: Comparable[]; excludedCount: number }) {
   const [showDetail, setShowDetail] = useState(true);
 
@@ -114,11 +122,11 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
       <div className="row" style={{ alignItems: "center", gap: 10 }}>
         {est.enough && (
           <span className="conf-chip" style={{ background: "var(--paper-2)", color: confColor(est.confLabel), border: `1px solid ${confColor(est.confLabel)}33` }}>
-            ● Confiance {est.confLabel} ({est.confidence})
+            ● Confiance {est.confLabel} ({est.confidence}/100)
           </span>
         )}
         <button className="btn ghost" style={{ fontSize: "0.8rem", padding: "4px 10px" }} onClick={() => setShowDetail((v) => !v)}>
-          {showDetail ? "▾ Détails" : "▸ Détails"}
+          {showDetail ? "▾ Masquer le détail" : "▸ Voir le détail"}
         </button>
       </div>
     </div>
@@ -137,6 +145,7 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
 
   const d = est.displayed!;
   const e = est.estimate!;
+  const cp = est.confParts;
   const span = d.max - d.min || 1;
   const pct = (v: number) => Math.max(0, Math.min(100, ((v - d.min) / span) * 100));
 
@@ -144,35 +153,41 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
     <div className="card analyse" style={{ marginBottom: 16, borderLeft: "3px solid var(--green)" }}>
       {header}
 
-      {/* Fourchette d'estimation — en tête, gros. */}
-      <div className="analyse-hero">
-        <div>
-          <div className="muted analyse-k">Estimation prix signé (€/m²)</div>
-          <div className="analyse-range">
-            {eur(e.low)} <span className="analyse-dash">–</span> {eur(e.high)}
-          </div>
-          <div className="muted" style={{ fontSize: "0.8rem" }}>médiane {eur(e.median)} /m²</div>
+      {/* Le chemin du prix : Affiché → −décote → Signé estimé. */}
+      <div className="flow">
+        <div className="flow-box">
+          <div className="flow-k">Prix affiché médian</div>
+          <div className="flow-v">{eur(d.median)}<span className="flow-u">/m²</span></div>
+          <div className="flow-sub">d'après les annonces</div>
         </div>
-        <div className="analyse-sep" />
-        <div>
-          <div className="muted analyse-k">Affiché médian</div>
-          <div className="analyse-num">{eur(d.median)}/m²</div>
+        <div className="flow-op">
+          <div className="flow-op-badge">− {est.decotePct}%</div>
+          <div className="flow-op-k">décote<br />affiché → signé</div>
         </div>
-        <div>
-          <div className="muted analyse-k">Décote affiché→signé</div>
-          <div className="analyse-num">−{est.decotePct}%</div>
+        <div className="flow-box flow-box-strong">
+          <div className="flow-k">Estimation prix signé</div>
+          <div className="flow-v flow-v-green">{eur(e.low)} <span className="flow-dash">–</span> {eur(e.high)}<span className="flow-u">/m²</span></div>
+          <div className="flow-sub">médiane {eur(e.median)}/m²</div>
         </div>
-        <div>
-          <div className="muted analyse-k">Réf. Observatoire (signé)</div>
-          <div className="analyse-num">{est.signedRef ? `${eur(est.signedRef.signed)}/m²` : "—"}</div>
-        </div>
+      </div>
+
+      {/* Référence Observatoire (prix réellement signés chez le notaire). */}
+      <div className="analyse-obs">
+        <span className="muted">Référence Observatoire de l'Habitat — prix de vente signés (notariés){est.commune ? `, ${est.commune}` : ""} : </span>
+        {est.signedRef ? (
+          <strong>{eur(est.signedRef.signed)}/m² <span className="muted" style={{ fontWeight: 400 }}>(période {est.signedRef.period})</span></strong>
+        ) : (
+          <strong className="muted">non disponible pour cette commune</strong>
+        )}
       </div>
 
       {showDetail && (
         <>
-          {/* Barre de distribution des €/m² affichés. */}
-          <div style={{ marginTop: 18 }}>
-            <div className="muted analyse-k" style={{ marginBottom: 18 }}>Distribution des €/m² affichés ({mv.length} retenus{excludedCount ? `, ${excludedCount} exclus` : ""})</div>
+          {/* Distribution des €/m² affichés. */}
+          <div style={{ marginTop: 24 }}>
+            <div className="muted analyse-k" style={{ marginBottom: 18 }}>
+              Distribution des €/m² affichés ({mv.length} comparable{mv.length > 1 ? "s" : ""} retenu{mv.length > 1 ? "s" : ""}{excludedCount ? `, ${excludedCount} exclu${excludedCount > 1 ? "s" : ""}` : ""})
+            </div>
             <div className="dist-bar">
               <div className="dist-iqr" style={{ left: `${pct(d.p25)}%`, width: `${pct(d.p75) - pct(d.p25)}%` }} />
               <div className="dist-tick" style={{ left: `${pct(d.median)}%` }} title={`Médiane ${eur(d.median)}`} />
@@ -205,14 +220,65 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
             ))}
           </div>
 
-          <p className="muted" style={{ fontSize: "0.78rem", margin: "14px 0 0", lineHeight: 1.5 }}>
-            {est.signedRef ? (
-              <>Décote <strong>mesurée</strong> sur {est.commune} (actes notariés Observatoire, période {est.signedRef.period}).</>
-            ) : (
-              <>Pas de prix signé Observatoire pour cette commune → décote <strong>globale</strong> appliquée ({est.decoteReason || "fallback prudent"}), fourchette plus indicative.</>
-            )}{" "}
-            Prix affichés (annonces), supérieurs au signé. Faisceau d'indices, pas un prix ferme. Sur les maisons, le €/m² est trompeur (terrain).
-          </p>
+          {/* Comment lire — vraies phrases. */}
+          <div className="analyse-note">
+            <div className="analyse-note-h">Comment lire cette estimation</div>
+            <p>
+              Les prix affichés sont ceux des annonces (atHome, Immotop). Ils sont presque toujours
+              <strong> supérieurs au prix réellement signé</strong> chez le notaire. Pour estimer ce prix signé,
+              on applique une décote de <strong>{est.decotePct}%</strong>.
+            </p>
+            <p>
+              {est.signedRef ? (
+                <>
+                  Cette décote est <strong>mesurée localement</strong> sur les actes notariés
+                  {est.commune ? ` de ${est.commune}` : ""} publiés par l'Observatoire de l'Habitat
+                  (période {est.signedRef.period}) — elle est donc fiable pour cette commune.
+                </>
+              ) : (
+                <>
+                  Faute de prix signé de l'Observatoire pour cette commune, on applique une
+                  <strong> décote globale prudente</strong> ({est.decoteReason || "valeur de repli"}).
+                  La fourchette est donc <strong>plus indicative</strong> qu'ailleurs.
+                </>
+              )}
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              Le résultat est un <strong>faisceau d'indices, pas un prix ferme</strong>. Pour une maison en
+              particulier, le prix au m² est trompeur : il dépend fortement du terrain, qui varie beaucoup
+              d'un bien à l'autre — mieux vaut raisonner aussi en prix total.
+            </p>
+          </div>
+
+          {/* D'où vient la confiance — vraies phrases + 3 facteurs. */}
+          {cp && (
+            <div className="analyse-note">
+              <div className="analyse-note-h">
+                D'où vient la confiance ?{" "}
+                <span style={{ color: confColor(est.confLabel) }}>● {est.confLabel} ({est.confidence}/100)</span>
+              </div>
+              <p>La note combine trois facteurs :</p>
+              <ul className="analyse-factors">
+                <li>
+                  <strong>Nombre de comparables</strong> : {cp.nComps} retenu{cp.nComps > 1 ? "s" : ""} ({cp.sizeLabel}).
+                  Plus il y en a, plus l'estimation est robuste.
+                </li>
+                <li>
+                  <strong>Homogénéité</strong> : les €/m² s'étalent de {eur(d.p25)} à {eur(d.p75)} (du 1ᵉʳ au 3ᵉ quartile,
+                  soit +{cp.spreadPct}%) — comparables {cp.dispLabel}. Plus c'est resserré, plus c'est fiable.
+                </li>
+                <li>
+                  <strong>Donnée notariale</strong> :{" "}
+                  {cp.hasSigned
+                    ? "un prix signé de l'Observatoire existe pour la commune, ce qui ancre la décote."
+                    : "aucun prix signé local — l'estimation est moins ancrée, d'où une note plus basse."}
+                </li>
+              </ul>
+              <p style={{ marginBottom: 0 }} className="muted">
+                La note ne dépasse jamais 95 : une estimation reste une estimation.
+              </p>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -344,24 +410,31 @@ export default function RunPage({ params }: { params: { id: string } }) {
 
       {run?.status === "done" && (
         <>
-          <div className="card" style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div className="row" style={{ alignItems: "center", gap: 16, flex: 1 }}>
-              <strong style={{ fontSize: "0.9rem" }}>Exporter</strong>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: 0, fontWeight: 500, color: "var(--ink)", cursor: "pointer" }}>
-                <input type="checkbox" checked={expPhotos} onChange={(e) => setExpPhotos(e.target.checked)} /> Photos
-              </label>
-              <label style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: 0, fontWeight: 500, color: "var(--ink)", cursor: "pointer" }}>
-                <input type="checkbox" checked={expDetails} onChange={(e) => setExpDetails(e.target.checked)} /> Détails (description)
-              </label>
+          <div className="card" style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px" }}>
+              <div className="row" style={{ alignItems: "center", gap: 16, flex: 1 }}>
+                <strong style={{ fontSize: "0.9rem" }}>Exporter</strong>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: 0, fontWeight: 500, color: "var(--ink)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={expPhotos} onChange={(e) => setExpPhotos(e.target.checked)} disabled={!!expBusy} /> Photos
+                </label>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: 0, fontWeight: 500, color: "var(--ink)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={expDetails} onChange={(e) => setExpDetails(e.target.checked)} disabled={!!expBusy} /> Détails (description)
+                </label>
+              </div>
+              <div className="row" style={{ flex: "0 0 auto", gap: 8 }}>
+                <button className="btn ghost exp-btn" onClick={() => doExport("xlsx")} disabled={!!expBusy}>
+                  <ExcelIcon /> {expBusy === "xlsx" ? "Génération…" : "Excel"}
+                </button>
+                <button className="btn ghost exp-btn" onClick={() => doExport("pdf")} disabled={!!expBusy}>
+                  <PdfIcon /> {expBusy === "pdf" ? "Génération…" : "PDF"}
+                </button>
+              </div>
             </div>
-            <div className="row" style={{ flex: "0 0 auto", gap: 8 }}>
-              <button className="btn ghost" onClick={() => doExport("xlsx")} disabled={!!expBusy}>
-                {expBusy === "xlsx" ? "..." : "⬇ Excel"}
-              </button>
-              <button className="btn clay" onClick={() => doExport("pdf")} disabled={!!expBusy}>
-                {expBusy === "pdf" ? "..." : "⬇ PDF"}
-              </button>
-            </div>
+            {expBusy && (
+              <div className="exp-progress" title={`Génération du ${expBusy === "pdf" ? "PDF" : "fichier Excel"}…`}>
+                <div className="exp-progress-bar" />
+              </div>
+            )}
           </div>
           {(() => {
             // Répartition par source (dérivée des résultats, source de vérité fiable).

@@ -110,6 +110,17 @@ export async function GET(req: NextRequest) {
     confidence = Math.max(15, Math.min(95, confidence));
     const confLabel = confidence >= 75 ? "Élevée" : confidence >= 55 ? "Bonne" : confidence >= 40 ? "Modérée" : "Faible";
 
+    // Détail lisible des 3 facteurs (pour expliquer la note dans l'UI).
+    const sizeLabel = vals.length >= 15 ? "solide" : vals.length >= 8 ? "correct" : "faible";
+    const dispLabel = spread <= 1.3 ? "très homogènes" : spread <= 1.6 ? "homogènes" : spread <= 2 ? "assez dispersés" : "très dispersés";
+    const confParts = {
+      nComps: vals.length,
+      sizeLabel,
+      spreadPct: Math.round((spread - 1) * 100), // écart P25→P75 en %
+      dispLabel,
+      hasSigned: !!signedRow,
+    };
+
     return NextResponse.json({
       enough: true,
       nComps: vals.length,
@@ -122,6 +133,7 @@ export async function GET(req: NextRequest) {
       estimate: { low: signedLow, median: signedMedian, high: signedHigh },
       confidence,
       confLabel,
+      confParts,
     });
   } catch (e: any) {
     console.error("[estimate]", e);
