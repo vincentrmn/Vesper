@@ -160,4 +160,35 @@ Le fork du code est fait et **buildable** (`npm run build` passe). Détail compl
 - ⚠️ Pilotage Railway depuis Claude **uniquement en GraphQL direct** (`backboard.railway.com`, `Authorization: Bearer <token>`). La CLI/MCP Railway rejettent ce token (workspace token, user-scoped). L'environnement Claude doit **autoriser l'egress vers `backboard.railway.com`**.
 - **Routes admin (one-shot, secret = `INGEST_SECRET`)** : `POST /api/admin/seed-geo {secret,towns[]}` (re-seed géo) ; `POST /api/admin/fetch-observatoire {secret}` (réimport Observatoire).
 
-**Prochaines étapes (ordre) :** 1) **garde-fou comparables aberrants** (plancher surface ~10–15 m² + plafond €/m² vs réf Observatoire) — cohérent §0/§5 ; 2) dédup **référentielle** immotop↔atHome dans `listings` (aujourd'hui dédup au niveau du run seulement) ; 3) immotop **maisons** (idCategoria + path `vente-maisons`) ; 4) localités immotop (autocomplete à la maille localité) ; 5) cron de réimport Observatoire.
+### Sprint 1 — session du 25/06/2026 (fixes & design, tout livré + déployé)
+
+**Scrapers / données (n8n live patchés + publiés, sources SDK sync) :**
+- **atHome recherche à 0 résultat ne plante plus** (#1143) : `GET fiche detail` en `onError:continueRegularOutput` + `Extrait CPE` détecte le sentinelle `_empty` via l'item source apparié → run finalisé `done`.
+- **atHome NEUF (`newOnly`)** : on ne re-filtre plus sur `a.isNewBuild` (flag non fiable, ~50 % faux) — l'URL `new_build=true` suffit. Avant : `totalAtHome>0` mais 0 gardé.
+- **Tokens commune L9→L7** (cf. ci-dessus) : 101 communes corrigées.
+- **Immotop type de bien** : filtre réel = `idTipologia` (4/5 appart, 7/12 maison), plus `idCategoria`/`path`. Fini les maisons en recherche appartements.
+- **Immotop état** : filtré **côté scraper** sur `ga4Condition` + `criteria.conditions` (pas de param serveur). Filtre énergie immotop **retiré** (donnée absente).
+- **Ingest robuste** : coercition `rooms`/prix/surface + `Promise.allSettled` (plus de 500 sur donnée sale).
+- **Dédup niveau 2** (`lib/dedup.ts`) : prix+surface quasi identiques → fusion jusqu'à 800 m (géocodage cross-portail divergent).
+
+**App / UX :**
+- **Carte « Analyse » refaite** : chemin Affiché → décote → Signé + 2 encarts en vraies phrases (lecture + « d'où vient la confiance », `confParts` exposé par `/api/estimate`).
+- **Export** : logos Excel/PDF + barre de chargement.
+- **Trigger** : Immotop **non interrogé si `newOnly`** (ne sait pas filtrer le neuf) ; passe `conditions` (plus `statoIds`/`energyId`).
+- **Mobile** : carte de comparable réordonnée (titre puis « Inclure » labellisée), options export empilées, étiquettes de distribution dégroupées.
+
+**Design « BBI tools » (base posée) :**
+- Système `.ds-*` dense pro dans `globals.css` + vitrine **`/style`** (additif, aucune page migrée). Doc de référence : **`docs/BBI-tools-design.md`**.
+- Outils branchés : skill **ui-ux-pro-max** (actif) + MCP **magic** 21st.dev (à charger au redémarrage). Décisions : CSS maison + primitives, Vesper d'abord, dense pro clair, accent vert BBI.
+
+### Roadmap (priorisée — validée Vincent 25/06)
+
+1. **✅ Creuser Immotop (incohérences persistantes) — RÉGLÉ (session immotop, 2 passes)** — audit api-next complet sur données réelles (Frisange). **Le « 7 vs 4 » de Vincent** : Vesper excluait trop. Distinction clé trouvée : `ga4Condition="Nuovo / In costruzione"` est une **CONDITION d'état** (« comme neuf »), PAS un statut de programme — une unité individuelle neuve reste un comparable existant légitime. Le vrai « Existant » d'immotop ne retire QUE les **programmes promoteur** = `category.id 27` (« immobilier neuf ») / typologie « Projet » (id 276) / `isProjectLike` / titre « programme neuf ». Fix : `isProgram()` (gouverné par `includeNew`, `stats.countNew`), **on n'exclut plus sur `isNew`** (non fiable, vu `true` sur des biens « Buono/Abitabile » existants) **ni sur `ga4=Nuovo`** (= condition). Vérifié en prod : Aspelt → **7** (= immotop), commune → **48** (= immotop). Les unités neuves restent **affichées + badgées `neuf`**.
+2. **✅ Localité (gros écart de précision) — RÉGLÉ (session immotop)** — aucun param serveur immotop ne filtre la localité (testé : `idLocalita`/`idMacrozona`/`idMicrozona`/type-3 en `idComune` → 500 ou commune entière). MAIS `properties[0].location.macrozone` **porte fidèlement la localité** (Aspelt / Hellange / « Frisange Localité »). Fix : le scraper **filtre côté client par `macroSlug(macrozone)` ∈ `quartierSlugs`** (déjà envoyés par le trigger pour les localités ET les quartiers Lux-Ville). Vérifié en prod (run live) : recherche Aspelt → 3 biens Aspelt, 19 hors-localité écartés (`stats.countOtherLocality`). Macrozone absente => bien écarté (précision).
+3. **✅ Immotop « Rénové » ET « Neuf » — RÉGLÉ (session immotop)** — `mapEtat` mappe désormais « Nuovo / In costruzione » → état **`neuf`** distinct (plus `renove`). Nouveau type `etat:"neuf"` (badge vert) ; le tag « Neuf » (mots-clés titre/desc) est **masqué quand `etat==="neuf"`** → plus de double-badge. `Listing.etat` + UI + export à jour.
+   - **Taxonomie type immotop (vérifiée)** : appartement individuel = `idTipologia` **4** (toutes tailles, **studio inclus**) **+ 5** (penthouse). `typology.id` (affichage : 14/15…) ≠ `idTipologia` (filtre). 6=parking, **10=immeuble entier** (investissement, exclu), 12=villa, 16=commerce, 28=terrain. Donc `[4,5]` couvre déjà studio + penthouse + tous les appartements (rien à ajouter).
+4. **✅ CPE / énergie Immotop — ACTÉ ABSENT (session immotop)** — re-testé : payload liste = **zéro clé énergie** (juste `ga4Heating` = type de chauffage), fiche détail api-next **500**, HTML **403**. Couverture description ~8 % (écartée en S14). **Décision : pas de CPE immotop**, assumé dans l'UI (le dépliant le dit déjà). Ne pas y revenir sans nouvelle voie d'accès.
+5. **🎨 BBI tools design** — session dédiée (voir `docs/BBI-tools-design.md`) : finaliser les primitives puis migrer les écrans Vesper, puis porter sur BBIscout.
+6. **Garde-fou comparables aberrants** (plancher surface ~10–15 m² + plafond €/m² vs réf Observatoire) — §0/§5.
+7. **Dédup référentielle** immotop↔atHome dans `listings` (aujourd'hui au niveau du run seulement).
+8. **Cron de réimport Observatoire**.
