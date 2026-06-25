@@ -112,14 +112,10 @@ export async function triggerRun(
   // immotop : best-effort. Un échec d'envoi décrémente le compteur (le run se
   // termine avec les seuls résultats atHome) — il ne casse jamais le run.
   if (fire.includes("immotop")) {
-    // Filtre d'état -> ids `stato` immotop (à rénover=5, habitable=2, rénové=6).
-    const STATO_BY_ETAT: Record<string, number> = { a_renover: 5, habitable: 2, renove: 6 };
-    const statoIds = (Array.isArray(criteria.conditions) ? criteria.conditions : [])
-      .map((c: string) => STATO_BY_ETAT[c])
-      .filter((v: number | undefined): v is number => typeof v === "number");
-    // Bande énergie immotop (cumulative) -> id classeEnergetica.
-    const ENERGY_BY_BAND: Record<string, number> = { excellente: 1, moyenne: 5, basse: 3 };
-    const energyId = criteria.immotopEnergy ? ENERGY_BY_BAND[criteria.immotopEnergy] : undefined;
+    // État : immotop n'a pas de filtre serveur fiable ; le scraper filtre côté
+    // client sur `ga4Condition` (présent dans la réponse liste). On lui passe donc
+    // directement les états demandés. (Énergie/CPE : non exposés par immotop → pas
+    // de filtre énergie côté immotop, cf. étude api-next.)
     const imCriteria = {
       propertyType: criteria.propertyType,
       includeNew: criteria.includeNew,
@@ -129,8 +125,7 @@ export async function triggerRun(
       priceMax: criteria.priceMax,
       quartierSlugs,
       communeNames,
-      statoIds,
-      energyId,
+      conditions: Array.isArray(criteria.conditions) ? criteria.conditions : [],
       maxPages: 30,
     };
     fetch(immotopWebhook!, {

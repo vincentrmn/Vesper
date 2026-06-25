@@ -34,7 +34,6 @@ export default function NewSearch() {
   const [includeNoCpe, setIncludeNoCpe] = useState(false);
   const [sources, setSources] = useState<("athome" | "immotop")[]>(["athome", "immotop"]);
   const [conditions, setConditions] = useState<("a_renover" | "habitable" | "renove")[]>([]);
-  const [immotopEnergy, setImmotopEnergy] = useState<"" | "excellente" | "moyenne" | "basse">("");
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -72,7 +71,6 @@ export default function NewSearch() {
         includeNoCpe: allCpe ? false : includeNoCpe,
         sources,
         conditions: hasImmotop ? conditions : [],
-        immotopEnergy: hasImmotop && immotopEnergy ? immotopEnergy : undefined,
       },
     };
   }
@@ -232,19 +230,7 @@ export default function NewSearch() {
 
             {hasImmotop && (
               <div style={{ marginTop: hasAthome ? 22 : 0, paddingTop: hasAthome ? 18 : 0, borderTop: hasAthome ? "1px solid var(--line)" : "none" }}>
-                <label>Classes énergétiques · Immotop</label>
-                <select value={immotopEnergy} onChange={(e) => setImmotopEnergy(e.target.value as any)}>
-                  <option value="">Toutes</option>
-                  <option value="excellente">Excellente — A à C</option>
-                  <option value="moyenne">Moyenne — jusqu'à F (A–F)</option>
-                  <option value="basse">Basse — toutes notées (A–I)</option>
-                </select>
-                <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-                  Immotop ne propose que ces 3 paliers <strong>cumulatifs</strong> (« cette qualité et mieux »),
-                  pas la classe exacte comme atHome.
-                </p>
-
-                <label style={{ marginTop: 16 }}>État du bien · Immotop</label>
+                <label>État du bien · Immotop</label>
                 <div className="chips">
                   {([["a_renover", "À rénover"], ["habitable", "Habitable"], ["renove", "Rénové"]] as const).map(([k, lbl]) => (
                     <span key={k} className={`chip ${conditions.includes(k) ? "on" : ""}`} onClick={() => toggleCondition(k)}>{lbl}</span>
@@ -252,6 +238,10 @@ export default function NewSearch() {
                 </div>
                 <p className="zone-picker__hint" style={{ marginTop: 6 }}>
                   État de rénovation, propre à Immotop (atHome ne le fournit pas). Vide = tous les états.
+                  Les biens dont Immotop ne renseigne pas l'état sont écartés si tu filtres.
+                </p>
+                <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+                  ℹ️ Immotop ne publie <strong>ni CPE ni classe énergétique</strong> dans ses résultats : il n'y a pas de filtre énergie pour cette source (côté atHome, oui).
                 </p>
               </div>
             )}

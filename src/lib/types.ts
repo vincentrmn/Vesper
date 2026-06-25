@@ -69,10 +69,8 @@ export type Criteria = {
   includeNoCpe?: boolean;
   /** Sources de scraping. Absent/vide => ['athome']. 'immotop' tenté si webhook configuré. */
   sources?: ("athome" | "immotop")[];
-  /** Filtre d'état de rénovation (immotop uniquement). Vide => pas de filtre. */
+  /** Filtre d'état de rénovation (immotop uniquement, via ga4Condition). Vide => pas de filtre. */
   conditions?: ("a_renover" | "habitable" | "renove")[];
-  /** Bande énergie immotop (cumulative « et mieux »). Absent => pas de filtre. */
-  immotopEnergy?: "excellente" | "moyenne" | "basse";
 };
 
 export type ConfigRow = {
