@@ -200,9 +200,9 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
 
             <DistributionChart values={mv} q={d} signed={est.signedRef?.signed ?? null} fmt={eur} />
             <p className="ds-hint" style={{ marginTop: 6 }}>
-              Histogramme = nombre de biens par tranche de prix ; la courbe en lisse la forme.
-              Zone verte = <strong>moitié centrale</strong> (P25→P75) ; chaque tick = un comparable réel.
-              Trait plein = médiane affichée, trait pointillé = prix <strong>signé</strong> de l'Observatoire.
+              Barres vertes = nombre de biens par tranche de prix ; la courbe en lisse la forme ;
+              chaque tick = un comparable réel. Traits verticaux : <strong>médiane</strong> (vert),
+              <strong> moyenne</strong> (gris pointillé), <strong>prix signé</strong> de l'Observatoire (noir pointillé).
             </p>
           </div>
 
