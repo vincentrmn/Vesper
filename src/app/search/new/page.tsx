@@ -256,7 +256,7 @@ export default function NewSearch() {
                   </div>
                   <p className="ds-hint">
                     Filtre par <strong>bande</strong> côté Immotop (« cette qualité <em>et mieux</em> »), pas une classe
-                    C-F exacte — Immotop ne publie pas le CPE par bien, donc il reste « — » dans le tableau.
+                    C-F exacte : Immotop ne publie pas le CPE par bien, donc il reste « · » dans le tableau.
                     Indicatif : à utiliser pour dégrossir, pas comme un CPE ferme.
                   </p>
                 </div>
