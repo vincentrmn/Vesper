@@ -42,6 +42,29 @@ function mergeRunResults(existing: Comparable[], incoming: Comparable[]): Compar
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+// Coercition défensive — les données scrapées (surtout Immotop) sont sales :
+// `rooms` peut être une fourchette (« 2 - 3 »), une chaîne (« 1 ») ou null ;
+// prix/surface peuvent arriver en chaîne. Un seul mauvais entier faisait
+// planter TOUT le batch (PG « invalid input syntax for type integer »).
+/** Nombre fini (accepte un entier/décimal en chaîne pure, "65" ou "64,5"), sinon null. */
+function numOrNull(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const s = v.replace(",", ".").trim();
+    if (/^\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+  }
+  return null;
+}
+/** Entier ou null. Sur une chaîne (« 2 - 3 », « 3 chambres »), prend le 1ᵉʳ entier. */
+function intOrNull(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? Math.round(v) : null;
+  if (typeof v === "string") {
+    const m = v.match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     await ensureSchema();
@@ -75,21 +98,33 @@ export async function POST(req: NextRequest) {
     if (!runRow.rows.length) return NextResponse.json({ error: "run introuvable" }, { status: 404 });
 
     const safe = Array.isArray(listings) ? listings : [];
-    const filtered = safe.filter(
-      (l) => l && typeof l.price === "number" && typeof l.surface === "number" && l.surface > 0
-    );
 
     // Source du POST ('athome' par défaut). Les biens immotop reçoivent un id
     // préfixé pour ne pas entrer en collision avec les ids atHome.
     const sourceTag: "athome" | "immotop" = (body as any).source === "immotop" ? "immotop" : "athome";
-    const items = filtered.map((l) => ({
-      ...l,
-      id: sourceTag === "immotop" ? `immotop-${l.id}` : String(l.id),
-    }));
+
+    // Normalisation + filtre : prix/surface coercés (un bien sans prix/surface
+    // valide est écarté), rooms ramené à un entier (ou null). Robuste aux
+    // fourchettes/chaînes Immotop — plus jamais de 500 sur un seul champ sale.
+    const items = safe
+      .map((l) => {
+        if (!l || l.id == null) return null;
+        const price = numOrNull((l as any).price);
+        const surface = numOrNull((l as any).surface);
+        if (price == null || surface == null || surface <= 0) return null;
+        return {
+          ...l,
+          id: sourceTag === "immotop" ? `immotop-${l.id}` : String(l.id),
+          price: Math.round(price),
+          surface,
+          rooms: intOrNull((l as any).rooms) ?? undefined,
+        };
+      })
+      .filter((l): l is NonNullable<typeof l> => l !== null);
 
     // Réconciliation des exclusions (biens transmis vs rejetés faute de prix/surface).
     const mergedStats: RunStats | null = stats
-      ? { ...stats, countReceived: safe.length, countIncomplete: safe.length - filtered.length }
+      ? { ...stats, countReceived: safe.length, countIncomplete: safe.length - items.length }
       : null;
     const mergedStatsJson = mergedStats ? JSON.stringify(mergedStats) : statsJson;
 
@@ -108,7 +143,8 @@ export async function POST(req: NextRequest) {
 
     // Upsert (ne touche jamais first_seen ; n'écrase ni photos existantes par un
     // tableau vide, ni des coordonnées connues par null).
-    await Promise.all(
+    // allSettled : un bien isolé en échec n'annule plus tout le batch (résilience).
+    const upserts = await Promise.allSettled(
       items.map((l) => {
         const photos = Array.isArray(l.photos)
           ? l.photos.filter((p) => typeof p === "string" && p.startsWith("http")).slice(0, 6)
@@ -138,9 +174,13 @@ export async function POST(req: NextRequest) {
         );
       })
     );
+    const upsertFailed = upserts.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+    if (upsertFailed.length) {
+      console.error(`[ingest] ${upsertFailed.length}/${items.length} upserts échoués (${sourceTag}) :`, upsertFailed[0].reason?.message ?? upsertFailed[0].reason);
+    }
 
     // Snapshot de prix : si bien nouveau OU prix changé.
-    await Promise.all(
+    await Promise.allSettled(
       items
         .filter((l) => {
           const prev = prevPriceMap.get(l.id);
