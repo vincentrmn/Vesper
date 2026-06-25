@@ -62,9 +62,9 @@ function listZones(cr: any): string {
 
 function HypRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", borderBottom: "1px solid var(--line)" }}>
-      <span className="muted" style={{ fontSize: "0.82rem" }}>{label}</span>
-      <span className="mono" style={{ fontSize: "0.85rem", textAlign: "right" }}>{value}</span>
+    <div className="ds-kv">
+      <span className="ds-kv__k">{label}</span>
+      <span className="ds-kv__v">{value}</span>
     </div>
   );
 }
@@ -114,55 +114,54 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="wrap">
+    <div className="wrap ds-scope">
       <div className="topbar">
         <a className="brand-home" href="/" title="Accueil">VESPER</a>
         <span className="page-title" />
         <div className="topbar-nav" />
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div className="section-title" style={{ flex: 1, margin: 0 }}>
-          <h2>Recherches sauvegardées</h2>
-          <span className="rule" />
-        </div>
-        <button className="btn clay" onClick={() => router.push("/search/new")}>
+      <div className="ds-section" style={{ marginTop: 0 }}>
+        <span className="ds-h2">Recherches sauvegardées</span>
+        <span className="ds-rule" />
+        <button className="ds-btn ds-btn--primary" onClick={() => router.push("/search/new")}>
           + Nouvelle estimation
         </button>
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        {configs.length === 0 && <p className="empty">Aucune recherche. Crée ta première estimation.</p>}
+      <div>
+        {configs.length === 0 && (
+          <div className="ds-empty">
+            <span className="ds-empty__title">Aucune recherche</span>
+            <span className="ds-empty__hint">Crée ta première estimation pour scraper les comparables et lire le marché.</span>
+            <button className="ds-btn ds-btn--ghost ds-btn--sm" style={{ marginTop: 4 }} onClick={() => router.push("/search/new")}>+ Nouvelle estimation</button>
+          </div>
+        )}
         {configs.map((c) => {
           const cr = c.criteria || {};
           const isOpen = !!openCfg[c.id];
           return (
             <Fragment key={c.id}>
-              <div className="list-item" style={isOpen ? { marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : undefined}>
-                <div>
-                  <strong>{c.name}</strong>
-                  <div className="muted" style={{ fontSize: "0.85rem", marginTop: 2 }}>
-                    {typeLabel(cr.propertyType)} · {summarizeZones(cr)} · CPE {summarizeCpe(cr)} ·{" "}
-                    {summarizeSources(cr)}
+              <div className={`ds-row${isOpen ? " ds-row--open" : ""}`}>
+                <div className="ds-row__main">
+                  <div className="ds-row__title">{c.name}</div>
+                  <div className="ds-row__sub">
+                    {typeLabel(cr.propertyType)} · {summarizeZones(cr)} · CPE {summarizeCpe(cr)} · {summarizeSources(cr)}
                   </div>
                 </div>
-                <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
-                  <button className="btn ghost" onClick={() => setOpenCfg((p) => ({ ...p, [c.id]: !p[c.id] }))}>
+                <div className="ds-row__actions">
+                  <button className="ds-btn ds-btn--ghost ds-btn--sm" onClick={() => setOpenCfg((p) => ({ ...p, [c.id]: !p[c.id] }))}>
                     {isOpen ? "Masquer" : "Voir"}
                   </button>
-                  <button className="btn" onClick={() => relancer(c.id)} disabled={busy === c.id}>
-                    {busy === c.id ? "..." : "Relancer"}
+                  <button className="ds-btn ds-btn--primary ds-btn--sm" onClick={() => relancer(c.id)} disabled={busy === c.id}>
+                    {busy === c.id ? "…" : "Relancer"}
                   </button>
-                  <button className="btn ghost" onClick={() => supprimer(c.id)}>
-                    ✕
-                  </button>
+                  <button className="ds-btn ds-btn--danger ds-btn--sm" title="Supprimer" onClick={() => supprimer(c.id)}>✕</button>
                 </div>
               </div>
               {isOpen && (
-                <div style={{ border: "1px solid var(--line)", borderTop: "none", borderRadius: "0 0 12px 12px", background: "var(--paper-2)", padding: "14px 16px", marginBottom: 10 }}>
-                  <div className="muted" style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                    Critères de recherche
-                  </div>
+                <div className="ds-drawer">
+                  <div className="ds-label" style={{ marginBottom: 6 }}>Critères de recherche</div>
                   <HypRow label="Type de bien" value={typeLabel(cr.propertyType)} />
                   <HypRow label="Zones" value={listZones(cr)} />
                   <HypRow label="Surface" value={`${cr.surfaceMin ?? "—"} → ${cr.surfaceMax ?? "—"} m²`} />
@@ -180,43 +179,39 @@ export default function Dashboard() {
       </div>
 
       <div
-        className="section-title"
+        className="ds-section"
         onClick={() => setShowRuns((v) => !v)}
         style={{ cursor: "pointer", userSelect: "none" }}
         title={showRuns ? "Replier" : "Déplier"}
       >
-        <h2>
-          <span style={{ display: "inline-block", transform: showRuns ? "rotate(90deg)" : "none", transition: "transform 0.12s ease", marginRight: 8 }}>
-            ▸
-          </span>
+        <span className="ds-h2">
+          <span style={{ display: "inline-block", transform: showRuns ? "rotate(90deg)" : "none", transition: "transform 0.12s ease", marginRight: 8 }}>▸</span>
           Dernières estimations{runs.length > 0 ? ` (${runs.length})` : ""}
-        </h2>
-        <span className="rule" />
+        </span>
+        <span className="ds-rule" />
       </div>
-      {showRuns && runs.length === 0 && <p className="empty">Aucune estimation lancée pour l'instant.</p>}
+      {showRuns && runs.length === 0 && (
+        <div className="ds-empty"><span className="ds-empty__hint">Aucune estimation lancée pour l'instant.</span></div>
+      )}
       {showRuns &&
         runs.map((r) => (
-          <a className="list-item" key={r.id} href={`/runs/${r.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-            <div>
-              <strong>{r.config_name || "—"}</strong>
-              <div className="muted" style={{ fontSize: "0.85rem", marginTop: 2 }}>
-                {new Date(r.started_at).toLocaleString("fr-FR")}
-              </div>
+          <a className="ds-row" key={r.id} href={`/runs/${r.id}`}>
+            <div className="ds-row__main">
+              <div className="ds-row__title">{r.config_name || "—"}</div>
+              <div className="ds-row__sub">{new Date(r.started_at).toLocaleString("fr-FR")}</div>
             </div>
-            <div className="row" style={{ flex: "0 0 auto", alignItems: "center" }}>
-              <span className="badge">{r.status}</span>
-              <span className="mono">{r.count} comps</span>
+            <div className="ds-row__actions">
+              <span className="ds-pill">{r.status}</span>
+              <span className="ds-num ds-muted" style={{ fontSize: "var(--ds-fs-sm)" }}>{r.count} comps</span>
               <button
-                className="btn ghost"
+                className="ds-btn ds-btn--danger ds-btn--sm"
                 title="Supprimer cette estimation"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   supprimerRun(r.id);
                 }}
-              >
-                ✕
-              </button>
+              >✕</button>
             </div>
           </a>
         ))}

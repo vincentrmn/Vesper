@@ -784,6 +784,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 @keyframes ds-shimmer { 100% { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .ds-skeleton::after { animation: none; } }
 
+/* ── Liste dense (recherches, runs, comparables en lignes) ───────────────── */
+.ds-row { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-s3); padding: var(--ds-s3) var(--ds-s4); background: var(--ds-bg); border: 1px solid var(--ds-line); border-radius: var(--ds-r-md); transition: border-color .12s; }
+.ds-row + .ds-row { margin-top: var(--ds-s2); }
+a.ds-row { text-decoration: none; color: inherit; }
+.ds-row:hover { border-color: var(--ds-accent); }
+.ds-row__main { min-width: 0; }
+.ds-row__title { font-weight: 600; }
+.ds-row__sub { font-size: var(--ds-fs-xs); color: var(--ds-ink-soft); margin-top: 2px; }
+.ds-row__actions { display: flex; align-items: center; gap: var(--ds-s2); flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; }
+/* Tiroir de détail accolé sous une ligne (ds-row--open enlève l'arrondi bas) */
+.ds-row--open { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.ds-drawer { border: 1px solid var(--ds-line); border-top: 0; border-radius: 0 0 var(--ds-r-md) var(--ds-r-md); background: var(--ds-bg-subtle); padding: var(--ds-s3) var(--ds-s4); margin-bottom: var(--ds-s2); }
+
+/* Key / value (panneau critères, fiches) */
+.ds-kv { display: flex; justify-content: space-between; gap: var(--ds-s3); padding: 5px 0; border-bottom: 1px solid var(--ds-line); font-size: var(--ds-fs-sm); }
+.ds-kv:last-child { border-bottom: 0; }
+.ds-kv__k { color: var(--ds-ink-soft); }
+.ds-kv__v { text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ── Photo strip (vignettes alignées au design system) ───────────────────── */
 .ds-photos { display: flex; gap: var(--ds-s2); overflow-x: auto; padding-bottom: 2px; }
 .ds-photo { flex: 0 0 auto; width: 96px; height: 70px; border-radius: var(--ds-r-md); border: 1px solid var(--ds-line); object-fit: cover; cursor: pointer; transition: border-color .12s, transform .06s; }
