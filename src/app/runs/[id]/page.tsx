@@ -44,7 +44,7 @@ type Run = {
   excluded_ids?: string[];
 };
 
-const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
+const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".") + " €";
 const plur = (n: number) => (n > 1 ? "s" : "");
 
 const ETAT_LABEL: Record<string, string> = { a_renover: "À rénover", habitable: "Habitable", renove: "Rénové" };
@@ -65,47 +65,6 @@ function EtatBadge({ etat }: { etat?: string | null }) {
   return <span className={`etat-badge ${etat}`}>{ETAT_LABEL[etat]}</span>;
 }
 
-function percentile(sorted: number[], p: number): number | null {
-  if (!sorted.length) return null;
-  if (sorted.length === 1) return sorted[0];
-  const idx = (sorted.length - 1) * p;
-  const lo = Math.floor(idx);
-  const hi = Math.ceil(idx);
-  if (lo === hi) return sorted[lo];
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
-}
-
-function Distribution({ comps }: { comps: Comparable[] }) {
-  const vals = comps
-    .map((c) => c.priceM2)
-    .filter((v): v is number => typeof v === "number" && Number.isFinite(v) && v > 0)
-    .sort((a, b) => a - b);
-  if (vals.length < 3) {
-    return (
-      <p className="muted" style={{ fontSize: "0.85rem", fontStyle: "italic", margin: 0 }}>
-        Trop peu de comparables retenus ({vals.length}) pour une distribution fiable des €/m².
-      </p>
-    );
-  }
-  const cells: { label: string; v: number | null }[] = [
-    { label: "Min", v: vals[0] },
-    { label: "P25", v: percentile(vals, 0.25) },
-    { label: "Médiane", v: percentile(vals, 0.5) },
-    { label: "P75", v: percentile(vals, 0.75) },
-    { label: "Max", v: vals[vals.length - 1] },
-  ];
-  return (
-    <div className="grid cols-2" style={{ gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
-      {cells.map((c) => (
-        <div key={c.label} style={{ textAlign: "center" }}>
-          <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{c.label}</div>
-          <div className="mono" style={{ fontSize: "1rem", fontWeight: 600 }}>{c.v != null ? eur(c.v) + "/m²" : "—"}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 type Estimate = {
   enough: boolean;
   nComps: number;
@@ -121,58 +80,140 @@ type Estimate = {
   confLabel?: string;
 };
 
-function MarketReading({ est }: { est: Estimate | null }) {
-  if (!est) return null;
-  if (!est.enough) {
+const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+function confColor(label?: string): string {
+  if (label === "Élevée") return "var(--green-ink)";
+  if (label === "Bonne") return "#1f7a4d";
+  if (label === "Modérée") return "#9a6b00";
+  return "#a12020";
+}
+
+/** Carte « Analyse » unifiée et graphique : fourchette d'estimation + barre de
+ *  distribution €/m² + moyennes + réf. Observatoire. Détails repliables. */
+function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: Comparable[]; excludedCount: number }) {
+  const [showDetail, setShowDetail] = useState(true);
+
+  const sv = comps.map((c) => c.surface).filter((v): v is number => typeof v === "number" && v > 0);
+  const pv = comps.map((c) => c.price).filter((v): v is number => typeof v === "number" && v > 0);
+  const mv = comps.map((c) => c.priceM2).filter((v): v is number => typeof v === "number" && v > 0);
+
+  if (!est) {
     return (
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="muted" style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
-          Lecture marché {est.commune ? `— ${est.commune}` : ""}
-        </div>
-        <p className="muted" style={{ margin: 0, fontStyle: "italic", fontSize: "0.85rem" }}>{est.message}</p>
+        <p className="muted" style={{ margin: 0, fontStyle: "italic" }}>Analyse en cours…</p>
       </div>
     );
   }
+
+  const header = (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+      <h2 style={{ margin: 0, fontSize: "1.1rem" }}>
+        Analyse {est.commune ? <span className="muted" style={{ fontWeight: 400 }}>— {est.commune}</span> : null}
+      </h2>
+      <div className="row" style={{ alignItems: "center", gap: 10 }}>
+        {est.enough && (
+          <span className="conf-chip" style={{ background: "var(--paper-2)", color: confColor(est.confLabel), border: `1px solid ${confColor(est.confLabel)}33` }}>
+            ● Confiance {est.confLabel} ({est.confidence})
+          </span>
+        )}
+        <button className="btn ghost" style={{ fontSize: "0.8rem", padding: "4px 10px" }} onClick={() => setShowDetail((v) => !v)}>
+          {showDetail ? "▾ Détails" : "▸ Détails"}
+        </button>
+      </div>
+    </div>
+  );
+
+  if (!est.enough) {
+    return (
+      <div className="card analyse" style={{ marginBottom: 16, borderLeft: "3px solid var(--line)" }}>
+        {header}
+        <p className="muted" style={{ margin: "10px 0 0", fontStyle: "italic", fontSize: "0.88rem" }}>
+          {est.message || "Pas assez de comparables retenus pour une estimation fiable."}
+        </p>
+      </div>
+    );
+  }
+
+  const d = est.displayed!;
   const e = est.estimate!;
+  const span = d.max - d.min || 1;
+  const pct = (v: number) => Math.max(0, Math.min(100, ((v - d.min) / span) * 100));
+
   return (
-    <div className="card" style={{ marginBottom: 16, borderLeft: "3px solid var(--green)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-        <div className="muted" style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          Lecture marché {est.commune ? `— ${est.commune}` : ""}
-        </div>
-        <span className={`badge`} title="Note de confiance" style={{ background: "var(--green-soft)", color: "var(--green-ink)" }}>
-          Confiance {est.confLabel} ({est.confidence})
-        </span>
-      </div>
+    <div className="card analyse" style={{ marginBottom: 16, borderLeft: "3px solid var(--green)" }}>
+      {header}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 24, marginTop: 12, alignItems: "flex-end" }}>
+      {/* Fourchette d'estimation — en tête, gros. */}
+      <div className="analyse-hero">
         <div>
-          <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase" }}>Affiché médian</div>
-          <div className="mono" style={{ fontSize: "1.05rem", fontWeight: 600 }}>{eur(est.displayed!.median)}/m²</div>
-        </div>
-        <div style={{ fontSize: "1.3rem", color: "var(--ink-soft)" }}>→</div>
-        <div>
-          <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase" }}>
-            Estimation signée (fourchette)
+          <div className="muted analyse-k">Estimation prix signé (€/m²)</div>
+          <div className="analyse-range">
+            {eur(e.low)} <span className="analyse-dash">–</span> {eur(e.high)}
           </div>
-          <div className="mono" style={{ fontSize: "1.05rem", fontWeight: 700, color: "var(--green-ink)" }}>
-            {eur(e.low)} – {eur(e.high)}/m² <span style={{ fontWeight: 400, color: "var(--ink-soft)" }}>(méd. {eur(e.median)})</span>
-          </div>
+          <div className="muted" style={{ fontSize: "0.8rem" }}>médiane {eur(e.median)} /m²</div>
+        </div>
+        <div className="analyse-sep" />
+        <div>
+          <div className="muted analyse-k">Affiché médian</div>
+          <div className="analyse-num">{eur(d.median)}/m²</div>
         </div>
         <div>
-          <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase" }}>Décote affiché→signé</div>
-          <div className="mono" style={{ fontSize: "1.05rem", fontWeight: 600 }}>−{est.decotePct} %</div>
+          <div className="muted analyse-k">Décote affiché→signé</div>
+          <div className="analyse-num">−{est.decotePct}%</div>
+        </div>
+        <div>
+          <div className="muted analyse-k">Réf. Observatoire (signé)</div>
+          <div className="analyse-num">{est.signedRef ? `${eur(est.signedRef.signed)}/m²` : "—"}</div>
         </div>
       </div>
 
-      <p className="muted" style={{ fontSize: "0.78rem", margin: "12px 0 0", lineHeight: 1.5 }}>
-        {est.signedRef ? (
-          <>Réf. Observatoire (actes notariés, {est.commune}) : <strong>{eur(est.signedRef.signed)}/m²</strong> signé · période {est.signedRef.period}. Décote mesurée sur la commune.</>
-        ) : (
-          <>Pas de prix signé Observatoire pour cette commune : décote <strong>globale</strong> appliquée ({est.decoteReason || "fallback prudent"}). Fourchette plus indicative.</>
-        )}{" "}
-        Prix affichés (annonces) → la valeur signée se lit dans les actes. C'est un faisceau d'indices, pas un prix ferme.
-      </p>
+      {showDetail && (
+        <>
+          {/* Barre de distribution des €/m² affichés. */}
+          <div style={{ marginTop: 18 }}>
+            <div className="muted analyse-k" style={{ marginBottom: 18 }}>Distribution des €/m² affichés ({mv.length} retenus{excludedCount ? `, ${excludedCount} exclus` : ""})</div>
+            <div className="dist-bar">
+              <div className="dist-iqr" style={{ left: `${pct(d.p25)}%`, width: `${pct(d.p75) - pct(d.p25)}%` }} />
+              <div className="dist-tick" style={{ left: `${pct(d.median)}%` }} title={`Médiane ${eur(d.median)}`} />
+              {[
+                { v: d.min, l: "Min" },
+                { v: d.p25, l: "P25" },
+                { v: d.median, l: "Méd." },
+                { v: d.p75, l: "P75" },
+                { v: d.max, l: "Max" },
+              ].map((t, i) => (
+                <div key={i} className="dist-lab" style={{ left: `${pct(t.v)}%` }}>
+                  <span className="dist-lab-v">{eur(t.v)}</span>
+                  <span className="dist-lab-k">{t.l}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Moyennes. */}
+          <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 34 }}>
+            {[
+              { label: "Surface moyenne", v: avg(sv), suf: " m²", eur: false },
+              { label: "Prix moyen", v: avg(pv), suf: "", eur: true },
+              { label: "€/m² moyen", v: avg(mv), suf: "/m²", eur: true },
+            ].map((c) => (
+              <div key={c.label} style={{ textAlign: "center" }}>
+                <div className="muted analyse-k">{c.label}</div>
+                <div className="analyse-num">{c.v == null ? "—" : c.eur ? eur(c.v) + c.suf : `${Math.round(c.v * 10) / 10}${c.suf}`}</div>
+              </div>
+            ))}
+          </div>
+
+          <p className="muted" style={{ fontSize: "0.78rem", margin: "14px 0 0", lineHeight: 1.5 }}>
+            {est.signedRef ? (
+              <>Décote <strong>mesurée</strong> sur {est.commune} (actes notariés Observatoire, période {est.signedRef.period}).</>
+            ) : (
+              <>Pas de prix signé Observatoire pour cette commune → décote <strong>globale</strong> appliquée ({est.decoteReason || "fallback prudent"}), fourchette plus indicative.</>
+            )}{" "}
+            Prix affichés (annonces), supérieurs au signé. Faisceau d'indices, pas un prix ferme. Sur les maisons, le €/m² est trompeur (terrain).
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -251,34 +292,43 @@ export default function RunPage({ params }: { params: { id: string } }) {
 
       {run?.status === "done" && (
         <>
-          {stats && (() => {
-            const sold = stats.countSold ?? 0;
-            const neuf = stats.countNew ?? 0;
-            const incomplete = stats.countIncomplete ?? 0;
-            // Les vendus/sous compromis sont désormais inclus dans run.count.
-            const residual = Math.max(0, stats.totalAtHome - neuf - incomplete - run.count);
+          {(() => {
+            // Répartition par source (dérivée des résultats, source de vérité fiable).
+            const athomeN = results.filter((r) => r.source === "athome" || r.source === "both").length;
+            const immotopN = results.filter((r) => r.source === "immotop" || r.source === "both").length;
+            const bothN = results.filter((r) => r.source === "both").length;
+            const sold = results.filter((r) => r.marketStatus === "sold").length;
+            // Détail scraping atHome (le bloc stats n'est renseigné que par le POST atHome).
+            const neuf = stats?.countNew ?? 0;
+            const incomplete = stats?.countIncomplete ?? 0;
+            const residual = stats ? Math.max(0, stats.totalAtHome - neuf - incomplete - athomeN) : 0;
             const exclusions = [
               { label: "neufs / en construction", n: neuf },
               { label: "hors critères CPE, type ou doublons", n: residual },
               { label: "données incomplètes (prix ou surface manquant)", n: incomplete },
             ].filter((e) => e.n > 0);
-            const totalExcluded = Math.max(0, stats.totalAtHome - run.count);
             return (
               <div className="card" style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: "0.9rem" }}>
-                  <strong>{stats.totalAtHome}</strong> bien{plur(stats.totalAtHome)} trouvé{plur(stats.totalAtHome)} sur atHome ·{" "}
-                  <strong>{stats.pagesFetched}</strong> page{plur(stats.pagesFetched)} scrapée{plur(stats.pagesFetched)}
-                  {stats.pagesPlanned > stats.pagesFetched ? ` sur ${stats.pagesPlanned} prévues` : ""} ·{" "}
-                  après filtres : <strong>{run.count}</strong> comparable{plur(run.count)}
-                  {sold > 0 ? ` (dont ${sold} vendu${plur(sold)} / sous compromis)` : ""}.
+                <div style={{ fontSize: "0.9rem", lineHeight: 1.6 }}>
+                  <strong>{run.count}</strong> comparable{plur(run.count)} unique{plur(run.count)} ={" "}
+                  <strong>{athomeN}</strong> atHome + <strong>{immotopN}</strong> Immotop
+                  {bothN > 0 ? <> − <strong>{bothN}</strong> doublon{plur(bothN)} cross-source fusionné{plur(bothN)}</> : null}
+                  {sold > 0 ? <> · dont <strong>{sold}</strong> vendu{plur(sold)}/sous compromis</> : null}.
                 </div>
-                {stats.capped && (
-                  <div className="error" style={{ marginTop: 8 }}>⚠️ Limite atteinte (50 pages ≈ 1000 biens). Affine tes filtres.</div>
+                {stats && (
+                  <div className="muted" style={{ fontSize: "0.8rem", marginTop: 4 }}>
+                    atHome : {stats.totalAtHome} annonce{plur(stats.totalAtHome)} listée{plur(stats.totalAtHome)},{" "}
+                    {stats.pagesFetched} page{plur(stats.pagesFetched)} lue{plur(stats.pagesFetched)}
+                    {stats.pagesPlanned > stats.pagesFetched ? ` (sur ${stats.pagesPlanned} nécessaires)` : ""}.
+                  </div>
                 )}
-                {totalExcluded > 0 && exclusions.length > 0 && (
+                {stats?.capped && (
+                  <div className="error" style={{ marginTop: 8 }}>⚠️ Plafond de pages atteint (≈ 1000 biens). Affine tes filtres pour tout couvrir.</div>
+                )}
+                {exclusions.length > 0 && (
                   <details style={{ marginTop: 10 }}>
                     <summary style={{ cursor: "pointer", fontSize: "0.82rem", color: "var(--ink-soft)" }}>
-                      Pourquoi {totalExcluded} bien{plur(totalExcluded)} écarté{plur(totalExcluded)} au scraping ?
+                      atHome : pourquoi {exclusions.reduce((s, e) => s + e.n, 0)} annonce(s) écartée(s) au scraping ?
                     </summary>
                     <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: "0.82rem", color: "var(--ink-soft)", lineHeight: 1.6 }}>
                       {exclusions.map((e) => (
@@ -291,50 +341,10 @@ export default function RunPage({ params }: { params: { id: string } }) {
             );
           })()}
 
-          <MarketReading est={estimate} />
-
-          {results.length > 0 && (
-            <div className="card" style={{ marginBottom: 16 }}>
-              <div className="muted" style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-                Moyennes — {included.length} comparable{plur(included.length)} retenu{plur(included.length)}
-                {excluded.size > 0 ? ` (${excluded.size} exclu${plur(excluded.size)})` : ""}
-              </div>
-              {(() => {
-                const sv = included.map((c) => c.surface).filter((v): v is number => typeof v === "number" && v > 0);
-                const pv = included.map((c) => c.price).filter((v): v is number => typeof v === "number" && v > 0);
-                const mv = included.map((c) => c.priceM2).filter((v): v is number => typeof v === "number" && v > 0);
-                const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
-                const cells = [
-                  { label: "Surface moy.", v: avg(sv), suf: " m²", round: 1 },
-                  { label: "Prix moyen", v: avg(pv), suf: "", eur: true },
-                  { label: "€/m² moyen", v: avg(mv), suf: "/m²", eur: true },
-                ];
-                return (
-                  <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 14 }}>
-                    {cells.map((c) => (
-                      <div key={c.label} style={{ textAlign: "center" }}>
-                        <div className="muted" style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{c.label}</div>
-                        <div className="mono" style={{ fontSize: "1.05rem", fontWeight: 700 }}>
-                          {c.v == null ? "—" : c.eur ? eur(c.v) + c.suf : `${Math.round(c.v * 10) / 10}${c.suf}`}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-              <div className="muted" style={{ fontSize: "0.74rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-                Distribution des €/m²
-              </div>
-              <Distribution comps={included} />
-              <p className="muted" style={{ fontSize: "0.78rem", margin: "12px 0 0", fontStyle: "italic" }}>
-                Prix AFFICHÉS (annonces), supérieurs au prix signé. Coche/décoche un bien pour l'inclure ou l'exclure du calcul.
-                Sur les maisons, le €/m² est trompeur (terrain).
-              </p>
-            </div>
-          )}
+          <Analyse est={estimate} comps={included} excludedCount={excluded.size} />
 
           <p className="muted" style={{ margin: "0 0 12px" }}>
-            {run.count} comparable{plur(run.count)} · lancé le {new Date(run.started_at).toLocaleString("fr-FR")}
+            {run.count} comparable{plur(run.count)} · lancé le {new Date(run.started_at).toLocaleString("fr-FR")} · coche/décoche un bien pour l'inclure/exclure du calcul
           </p>
 
           {run.count === 0 && <p className="empty">Aucun bien ne correspond aux critères.</p>}

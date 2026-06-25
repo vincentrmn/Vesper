@@ -28,7 +28,6 @@ export default function ZonePicker({ value, onChange }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +126,7 @@ export default function ZonePicker({ value, onChange }: Props) {
       {/* Champ de recherche + dropdown dynamique */}
       <div style={{ position: "relative" }}>
         <input
-          type="search"
+          type="text"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -171,41 +170,31 @@ export default function ZonePicker({ value, onChange }: Props) {
         )}
       </div>
 
-      {/* Localités d'une commune sélectionnée (toggle) */}
+      {/* Localités d'une commune sélectionnée — affichées directement (sans bouton). */}
       {selectedCommunes.map((lc) => {
         const kids = childrenByCommuneLoc.get(lc) || [];
-        const isOpen = !!expanded[lc];
         return (
-          <div key={lc} style={{ marginTop: 8 }}>
-            <button
-              type="button"
-              className="btn ghost"
-              style={{ fontSize: "0.8rem", padding: "4px 10px" }}
-              onClick={() => setExpanded((p) => ({ ...p, [lc]: !p[lc] }))}
-            >
-              {isOpen ? "▾" : "▸"} Localités de {labelByLoc.get(lc)} ({kids.length})
-            </button>
-            {isOpen && (
-              <div className="chips" style={{ marginTop: 8 }}>
-                {kids.map((k) => (
-                  <span
-                    key={k.loc_code}
-                    className={`chip ${value.includes(k.loc_code) ? "on" : ""}`}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => toggleChild(k.loc_code)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        toggleChild(k.loc_code);
-                      }
-                    }}
-                  >
-                    {k.label}
-                  </span>
-                ))}
-              </div>
-            )}
+          <div key={lc} style={{ marginTop: 12 }}>
+            <label style={{ marginBottom: 6 }}>Localités de {labelByLoc.get(lc)}</label>
+            <div className="chips">
+              {kids.map((k) => (
+                <span
+                  key={k.loc_code}
+                  className={`chip ${value.includes(k.loc_code) ? "on" : ""}`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleChild(k.loc_code)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleChild(k.loc_code);
+                    }
+                  }}
+                >
+                  {k.label}
+                </span>
+              ))}
+            </div>
           </div>
         );
       })}
