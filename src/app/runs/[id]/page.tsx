@@ -198,12 +198,20 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
                 { v: d.median, l: "Méd.", mid: false },
                 { v: d.p75, l: "P75", mid: true },
                 { v: d.max, l: "Max", mid: false },
-              ].map((t, i) => (
-                <div key={i} className={`dist-lab${t.mid ? " dist-lab-mid" : ""}`} style={{ left: `${pct(t.v)}%` }}>
-                  <span className="dist-lab-v">{eur(t.v)}</span>
-                  <span className="dist-lab-k">{t.l}</span>
-                </div>
-              ))}
+              ].map((t, i, arr) => {
+                // Extrêmes ancrés aux bords (Min à gauche, Max à droite) pour
+                // qu'ils ne débordent pas de la carte ; intermédiaires centrés.
+                const isFirst = i === 0;
+                const isLast = i === arr.length - 1;
+                const transform = isFirst ? "translateX(0)" : isLast ? "translateX(-100%)" : "translateX(-50%)";
+                const textAlign = isFirst ? "left" : isLast ? "right" : "center";
+                return (
+                  <div key={i} className={`dist-lab${t.mid ? " dist-lab-mid" : ""}`} style={{ left: `${pct(t.v)}%`, transform, textAlign }}>
+                    <span className="dist-lab-v">{eur(t.v)}</span>
+                    <span className="dist-lab-k">{t.l}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
