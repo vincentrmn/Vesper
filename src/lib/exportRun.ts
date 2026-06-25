@@ -170,7 +170,7 @@ export async function exportPdf(
   }
   doc.setFontSize(8.5); doc.setTextColor(...SOFT);
   doc.text(`Généré le ${new Date().toLocaleDateString("fr-FR")}`, 196, y + 4, { align: "right" });
-  y += 19;
+  y += 25; // air entre le logo et le titre
   doc.setFontSize(17); doc.setTextColor(...INK); bold();
   doc.text(`Estimation — ${a.commune || "comparables"}`, 14, y);
   if (a.enough && a.confLabel) {
@@ -198,12 +198,14 @@ export async function exportPdf(
     reg(); doc.setFontSize(7); doc.setTextColor(...SOFT);
     doc.text("d'après les annonces", x1 + 4, y + 20);
 
+    // Décote : simple et sans glyphes hors-police (le vrai « − » et « → » ne sont
+    // pas dans la police PDF standard → s'affichaient en " et !).
     const cx = (x1 + w1 + x2) / 2;
+    doc.setFontSize(6.5); doc.setTextColor(...SOFT);
+    doc.text("DÉCOTE", cx, y + 9, { align: "center" });
     doc.setFontSize(13); doc.setTextColor(...GREEN); bold();
-    doc.text(a.decotePct != null ? `− ${a.decotePct}%` : "—", cx, y + 11, { align: "center" });
-    reg(); doc.setFontSize(6.5); doc.setTextColor(...SOFT);
-    doc.text("décote", cx, y + 15.5, { align: "center" });
-    doc.text("affiché → signé", cx, y + 18.5, { align: "center" });
+    doc.text(a.decotePct != null ? `-${String(a.decotePct).replace(".", ",")} %` : "—", cx, y + 16, { align: "center" });
+    reg();
 
     box(x2, y, w2, h, GREEN_SOFT, GREEN);
     doc.setFontSize(7); doc.setTextColor(...GREEN); doc.text("ESTIMATION PRIX SIGNÉ", x2 + 5, y + 6);
@@ -273,8 +275,9 @@ export async function exportPdf(
   // --- Tableau des comparables (titres cliquables vers l'annonce) ---
   doc.setFontSize(12); doc.setTextColor(...INK); bold();
   doc.text("Comparables", 14, y);
+  const cw = doc.getTextWidth("Comparables"); // mesuré à 12 pt gras (sinon le sous-titre se superpose)
   reg(); doc.setFontSize(7.5); doc.setTextColor(...SOFT);
-  doc.text("— titres cliquables vers l'annonce", 14 + doc.getTextWidth("Comparables") + 3, y);
+  doc.text("— titres cliquables vers l'annonce", 14 + cw + 4, y);
   y += 3;
   autoTable(doc, {
     startY: y,
