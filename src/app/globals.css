@@ -694,6 +694,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   background: var(--ds-bg-subtle); color: var(--ds-ink); border: 1px solid var(--ds-line); border-radius: var(--ds-r-md); outline: none;
 }
 .ds-input:focus, .ds-select:focus { border-color: var(--ds-accent); background: #fff; }
+/* < 640px : inputs à 16px sinon iOS zoome au focus (règle UX skill §4) */
+@media (max-width: 640px) { .ds-input, .ds-select { font-size: 16px; } }
 
 /* Tags / badges / chips */
 .ds-tag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--ds-fs-xs); font-weight: 700; padding: 2px 8px; border-radius: var(--ds-r-sm); white-space: nowrap; }
@@ -783,6 +785,22 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .ds-skeleton--block { height: 64px; }
 @keyframes ds-shimmer { 100% { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .ds-skeleton::after { animation: none; } }
+
+/* ── Helpers formulaire ──────────────────────────────────────────────────── */
+.ds-chips { display: flex; gap: var(--ds-s2); flex-wrap: wrap; }
+.ds-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--ds-s3); }
+.ds-hint { font-size: var(--ds-fs-sm); color: var(--ds-ink-soft); margin: 6px 0 0; line-height: 1.45; }
+.ds-error { background: #fbeaea; border: 1px solid #e7c3c3; color: var(--ds-danger); padding: 10px 12px; border-radius: var(--ds-r-md); font-size: var(--ds-fs-sm); font-weight: 600; margin-top: var(--ds-s4); }
+/* Chip retirable (zone sélectionnée) */
+.ds-chip__x { border: 0; background: transparent; cursor: pointer; color: inherit; font-weight: 700; font-size: 13px; line-height: 1; padding: 0 0 0 2px; }
+
+/* Dropdown / menu de suggestions (zone picker) */
+.ds-menu { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); background: var(--ds-bg); border: 1px solid var(--ds-line); border-radius: var(--ds-r-md); box-shadow: var(--ds-shadow-md); max-height: 300px; overflow-y: auto; }
+.ds-menu__item { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: var(--ds-s2); padding: 8px 12px; border: 0; border-bottom: 1px solid var(--ds-line); background: transparent; cursor: pointer; text-align: left; font: inherit; font-size: var(--ds-fs-sm); }
+.ds-menu__item:last-child { border-bottom: 0; }
+.ds-menu__item:hover { background: var(--ds-bg-subtle); }
+.ds-menu__item[data-on="true"] { background: var(--ds-accent-soft); }
+.ds-menu__meta { font-size: var(--ds-fs-xs); color: var(--ds-ink-soft); }
 
 /* ── Liste dense (recherches, runs, comparables en lignes) ───────────────── */
 .ds-row { display: flex; align-items: center; justify-content: space-between; gap: var(--ds-s3); padding: var(--ds-s3) var(--ds-s4); background: var(--ds-bg); border: 1px solid var(--ds-line); border-radius: var(--ds-r-md); transition: border-color .12s; }

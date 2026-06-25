@@ -96,8 +96,8 @@ export default function ZonePicker({ value, onChange }: Props) {
     value.includes(qLoc) ? remove(qLoc) : onChange([...value, qLoc]);
   }
 
-  if (loading) return <p className="zone-picker__loading">Chargement des zones…</p>;
-  if (error) return <p className="zone-picker__error">Impossible de charger les zones ({error})</p>;
+  if (loading) return <p className="ds-hint">Chargement des zones…</p>;
+  if (error) return <p className="ds-hint" style={{ color: "var(--ds-danger)" }}>Impossible de charger les zones ({error})</p>;
 
   // Communes sélectionnées (pour proposer leurs localités).
   const selectedCommunes = value.filter((lc) => childrenByCommuneLoc.has(lc) && (childrenByCommuneLoc.get(lc) || []).length > 0);
@@ -106,18 +106,11 @@ export default function ZonePicker({ value, onChange }: Props) {
     <div>
       {/* Chips sélectionnés */}
       {value.length > 0 && (
-        <div className="chips" style={{ marginBottom: 10 }}>
+        <div className="ds-chips" style={{ marginBottom: 10 }}>
           {value.map((lc) => (
-            <span key={lc} className="chip on" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span key={lc} className="ds-chip" data-on="true">
               {labelByLoc.get(lc) || lc}
-              <button
-                type="button"
-                onClick={() => remove(lc)}
-                aria-label="Retirer"
-                style={{ border: "none", background: "transparent", cursor: "pointer", color: "inherit", fontWeight: 700, fontSize: "1rem", lineHeight: 1, padding: 0 }}
-              >
-                ×
-              </button>
+              <button type="button" className="ds-chip__x" onClick={() => remove(lc)} aria-label="Retirer">×</button>
             </span>
           ))}
         </div>
@@ -127,6 +120,7 @@ export default function ZonePicker({ value, onChange }: Props) {
       <div style={{ position: "relative" }}>
         <input
           type="text"
+          className="ds-input"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -138,30 +132,20 @@ export default function ZonePicker({ value, onChange }: Props) {
           autoComplete="off"
         />
         {open && matches.length > 0 && (
-          <div
-            style={{
-              position: "absolute", zIndex: 20, left: 0, right: 0, top: "calc(100% + 4px)",
-              background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 10,
-              boxShadow: "var(--shadow)", maxHeight: 300, overflowY: "auto",
-            }}
-          >
+          <div className="ds-menu">
             {matches.map((m) => (
               <button
                 key={m.locCode}
                 type="button"
+                className="ds-menu__item"
+                data-on={value.includes(m.locCode)}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   add(m.locCode);
                 }}
-                style={{
-                  display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between",
-                  gap: 8, padding: "8px 12px", border: "none", borderBottom: "1px solid var(--line)",
-                  background: value.includes(m.locCode) ? "var(--green-soft)" : "transparent",
-                  cursor: "pointer", textAlign: "left", fontSize: "0.9rem",
-                }}
               >
                 <span>{m.label}</span>
-                <span className="muted" style={{ fontSize: "0.72rem" }}>
+                <span className="ds-menu__meta">
                   {m.isCommune ? "Commune" : `Localité · ${m.communeLabel}`}
                 </span>
               </button>
@@ -175,12 +159,13 @@ export default function ZonePicker({ value, onChange }: Props) {
         const kids = childrenByCommuneLoc.get(lc) || [];
         return (
           <div key={lc} style={{ marginTop: 12 }}>
-            <label style={{ marginBottom: 6 }}>Localités de {labelByLoc.get(lc)}</label>
-            <div className="chips">
+            <span className="ds-label" style={{ display: "block", marginBottom: 6 }}>Localités de {labelByLoc.get(lc)}</span>
+            <div className="ds-chips">
               {kids.map((k) => (
                 <span
                   key={k.loc_code}
-                  className={`chip ${value.includes(k.loc_code) ? "on" : ""}`}
+                  className="ds-chip"
+                  data-on={value.includes(k.loc_code)}
                   role="button"
                   tabIndex={0}
                   onClick={() => toggleChild(k.loc_code)}
@@ -200,9 +185,7 @@ export default function ZonePicker({ value, onChange }: Props) {
       })}
 
       {value.length === 0 && (
-        <p className="zone-picker__hint" style={{ marginTop: 6 }}>
-          Tape le début d'une commune ou localité, puis choisis dans la liste.
-        </p>
+        <p className="ds-hint">Tape le début d'une commune ou localité, puis choisis dans la liste.</p>
       )}
     </div>
   );
