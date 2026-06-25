@@ -68,9 +68,13 @@ export async function triggerRun(
     Array.isArray(criteria.sources) && criteria.sources.length ? criteria.sources : ["athome"];
   const athomeWebhook = process.env.N8N_WEBHOOK_URL;
   const immotopWebhook = process.env.N8N_IMMOTOP_WEBHOOK_URL;
+  // « Neuf uniquement » : Immotop n'a pas de filtre neuf/ancien fiable (flag isNew
+  // non fiable, CLAUDE.md §6) → il ramènerait des biens existants et fausserait
+  // l'estimation. On ne l'interroge donc PAS pour une recherche neuf-only.
+  const newOnly = !!criteria.newOnly;
   const fire: ("athome" | "immotop")[] = [];
   if (wanted.includes("athome") && athomeWebhook && atHomeGeoOk) fire.push("athome");
-  if (wanted.includes("immotop") && immotopWebhook) fire.push("immotop");
+  if (wanted.includes("immotop") && immotopWebhook && !newOnly) fire.push("immotop");
 
   if (fire.length === 0) {
     const reason =
@@ -78,6 +82,8 @@ export async function triggerRun(
         ? "N8N_WEBHOOK_URL non configuré"
         : wanted.includes("athome") && !atHomeGeoOk
         ? "Aucune zone sélectionnée n'a de q_code configuré en base."
+        : newOnly && wanted.includes("immotop") && !wanted.includes("athome")
+        ? "« Neuf uniquement » n'est pas filtrable sur Immotop. Ajoute atHome (qui sait filtrer le neuf) pour cette recherche."
         : wanted.includes("immotop") && !immotopWebhook
         ? "immotop sélectionné mais N8N_IMMOTOP_WEBHOOK_URL non configuré."
         : "Aucune source de scraping disponible.";

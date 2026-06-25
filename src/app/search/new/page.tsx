@@ -169,6 +169,13 @@ export default function NewSearch() {
                 </select>
               </div>
             </div>
+            {construction === "neuf" && hasImmotop && (
+              <p className="zone-picker__hint" style={{ marginTop: 6 }}>
+                ⚠️ « Neuf uniquement » n'est pris en charge que par atHome. Immotop ne sait pas
+                filtrer le neuf de façon fiable → il sera ignoré pour cette recherche (sinon il
+                ramènerait des biens existants et fausserait l'estimation).
+              </p>
+            )}
 
             <div style={{ marginTop: 18 }}>
               <label>Localisation</label>

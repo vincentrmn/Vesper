@@ -441,6 +441,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   /* Dépliant de détail : bloc pleine largeur, pas de mise en forme "valeur" */
   .prop-table .cell-detail { text-align: left; min-height: 0; }
   .prop-table .cell-detail::before { display: none; }
+
+  /* Barre de distribution : on masque P25/P75 (chevauchement) — la bande IQR
+     les matérialise toujours — et on resserre les libellés Min/Méd/Max. */
+  .dist-lab-mid { display: none; }
+  .dist-lab-v { font-size: 0.66rem; }
+  .dist-lab-k { font-size: 0.56rem; }
+  .analyse-factors { padding-left: 16px; }
 }
 
 /* --------------------------------------------------------------------------

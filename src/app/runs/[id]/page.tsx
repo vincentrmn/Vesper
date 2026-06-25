@@ -192,13 +192,13 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
               <div className="dist-iqr" style={{ left: `${pct(d.p25)}%`, width: `${pct(d.p75) - pct(d.p25)}%` }} />
               <div className="dist-tick" style={{ left: `${pct(d.median)}%` }} title={`Médiane ${eur(d.median)}`} />
               {[
-                { v: d.min, l: "Min" },
-                { v: d.p25, l: "P25" },
-                { v: d.median, l: "Méd." },
-                { v: d.p75, l: "P75" },
-                { v: d.max, l: "Max" },
+                { v: d.min, l: "Min", mid: false },
+                { v: d.p25, l: "P25", mid: true },
+                { v: d.median, l: "Méd.", mid: false },
+                { v: d.p75, l: "P75", mid: true },
+                { v: d.max, l: "Max", mid: false },
               ].map((t, i) => (
-                <div key={i} className="dist-lab" style={{ left: `${pct(t.v)}%` }}>
+                <div key={i} className={`dist-lab${t.mid ? " dist-lab-mid" : ""}`} style={{ left: `${pct(t.v)}%` }}>
                   <span className="dist-lab-v">{eur(t.v)}</span>
                   <span className="dist-lab-k">{t.l}</span>
                 </div>
