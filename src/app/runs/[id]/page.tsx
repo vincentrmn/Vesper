@@ -180,29 +180,30 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
       {/* Niveau 2 — Indices de marché (distribution + moyennes), toujours visibles. */}
           {/* Distribution des €/m² affichés. */}
           <div style={{ marginTop: 22 }}>
-            <div className="analyse-k" style={{ marginBottom: 18 }}>
+            <div className="analyse-k" style={{ marginBottom: 12 }}>
               Distribution des €/m² affichés ({mv.length} comparable{mv.length > 1 ? "s" : ""} retenu{mv.length > 1 ? "s" : ""}{excludedCount ? `, ${excludedCount} exclu${excludedCount > 1 ? "s" : ""}` : ""})
             </div>
-            <DistributionChart values={mv} q={d} signed={est.signedRef?.signed ?? null} estimate={e} fmt={eur} />
-            <p className="ds-hint" style={{ marginTop: 6 }}>
-              Courbe = densité des €/m² <strong>affichés</strong> (lissée), chaque tick sous l'axe = un comparable réel.
-              Zone verte = <strong>moitié centrale</strong> (P25→P75). Trait plein = médiane affichée ; trait pointillé =
-              prix <strong>signé</strong> de l'Observatoire. Plus la courbe est resserrée, plus le marché local est homogène.
-            </p>
-          </div>
 
-          {/* Moyennes. */}
-          <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 22 }}>
-            {[
-              { label: "Surface moyenne", v: avg(sv), suf: " m²", eur: false },
-              { label: "Prix moyen", v: avg(pv), suf: "", eur: true },
-              { label: "€/m² moyen", v: avg(mv), suf: "/m²", eur: true },
-            ].map((c) => (
-              <div key={c.label} style={{ textAlign: "center" }}>
-                <div className="muted analyse-k">{c.label}</div>
-                <div className="analyse-num">{c.v == null ? "·" : c.eur ? eur(c.v) + c.suf : `${Math.round(c.v * 10) / 10}${c.suf}`}</div>
-              </div>
-            ))}
+            {/* KPI en cartes, au-dessus de la courbe (clarté visuelle). */}
+            <div className="ds-stats" style={{ marginBottom: 18 }}>
+              {[
+                { k: "Surface moyenne", v: avg(sv), suf: " m²", isEur: false },
+                { k: "Prix moyen", v: avg(pv), suf: "", isEur: true },
+                { k: "€/m² moyen", v: avg(mv), suf: "/m²", isEur: true },
+              ].map((c) => (
+                <div key={c.k} className="ds-stat">
+                  <div className="ds-stat__k">{c.k}</div>
+                  <div className="ds-stat__v ds-num">{c.v == null ? "·" : c.isEur ? eur(c.v) + c.suf : `${Math.round(c.v * 10) / 10}${c.suf}`}</div>
+                </div>
+              ))}
+            </div>
+
+            <DistributionChart values={mv} q={d} signed={est.signedRef?.signed ?? null} fmt={eur} />
+            <p className="ds-hint" style={{ marginTop: 6 }}>
+              Histogramme = nombre de biens par tranche de prix ; la courbe en lisse la forme.
+              Zone verte = <strong>moitié centrale</strong> (P25→P75) ; chaque tick = un comparable réel.
+              Trait plein = médiane affichée, trait pointillé = prix <strong>signé</strong> de l'Observatoire.
+            </p>
           </div>
 
           {/* Bouton dans le sens de lecture : sous les KPI, aligné à gauche. */}

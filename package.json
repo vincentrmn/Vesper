@@ -8,6 +8,12 @@
     "start": "next start"
   },
   "dependencies": {
+    "@visx/axis": "^4.0.0",
+    "@visx/curve": "^4.0.0",
+    "@visx/group": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/shape": "^4.0.0",
+    "@visx/text": "^4.0.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "next": "14.2.35",

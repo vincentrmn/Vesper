@@ -1,141 +1,152 @@
 "use client";
-// Graphique de distribution des €/m² affichés.
-// Honnêteté (CLAUDE.md §0) : PAS une gaussienne paramétrique (qui supposerait
-// une normalité qu'on n'a pas). On dessine une densité empirique lissée (KDE)
-// à partir des vrais €/m², + un « rug » des points réels dessous pour montrer
-// le nombre de comparables. Sous ~4 points : pas de courbe (marqueurs seuls).
+// Graphique de distribution des €/m² affichés, construit avec visx.
+// Honnêteté (CLAUDE.md §0) : on montre l'HISTOGRAMME réel (axe Y = nombre de
+// biens) + une densité lissée (KDE) par-dessus — pas une gaussienne
+// paramétrique qui supposerait une normalité qu'on n'a pas. Un « rug » épais
+// rappelle chaque comparable. Sous ~4 biens : histogramme seul, pas de courbe.
+import { scaleLinear } from "@visx/scale";
+import { AreaClosed, Bar, Line } from "@visx/shape";
+import { AxisBottom, AxisLeft } from "@visx/axis";
+import { Group } from "@visx/group";
+import { curveBasis } from "@visx/curve";
 
 type Quartiles = { min: number; p25: number; median: number; p75: number; max: number };
 
-function gaussianKernel(u: number) {
-  return Math.exp(-0.5 * u * u) / Math.sqrt(2 * Math.PI);
-}
+const gauss = (u: number) => Math.exp(-0.5 * u * u) / Math.sqrt(2 * Math.PI);
 
 export default function DistributionChart({
   values,
   q,
   signed,
-  estimate,
   fmt,
 }: {
   values: number[];
   q: Quartiles;
   signed?: number | null;
-  estimate?: { low: number; median: number; high: number } | null;
   fmt: (n: number) => string;
 }) {
   const vals = values.filter((v) => typeof v === "number" && v > 0).sort((a, b) => a - b);
   const n = vals.length;
 
-  // Géométrie (unités SVG ; le SVG s'étire à 100 % de la largeur).
-  const W = 720, H = 264;
-  const mL = 16, mR = 16, mT = 64, mB = 78;
-  const plotW = W - mL - mR;
-  const baseY = H - mB;
-  const topY = mT;
+  const W = 720, H = 300;
+  const m = { top: 44, right: 18, bottom: 66, left: 46 };
+  const iw = W - m.left - m.right;
+  const ih = H - m.top - m.bottom;
 
-  // Domaine x : englobe min/max, la réf signée et la fourchette estimée.
-  const candLo = [q.min, signed ?? Infinity, estimate?.low ?? Infinity].filter((x) => isFinite(x));
-  const candHi = [q.max, signed ?? -Infinity, estimate?.high ?? -Infinity].filter((x) => isFinite(x));
-  let lo = Math.min(...candLo);
-  let hi = Math.max(...candHi);
+  // Domaine x : englobe min/max + la référence signée.
+  let lo = Math.min(q.min, signed ?? Infinity);
+  let hi = Math.max(q.max, signed ?? -Infinity);
   if (!(hi > lo)) { lo = q.min - 1; hi = q.max + 1; }
-  const padX = (hi - lo) * 0.06 || 1;
-  lo -= padX; hi += padX;
-  const sx = (v: number) => mL + ((v - lo) / (hi - lo)) * plotW;
+  const pad = (hi - lo) * 0.06 || 1;
+  lo -= pad; hi += pad;
 
-  // KDE (Silverman) si assez de points et dispersion non nulle.
+  // Histogramme (comptes réels).
+  const B = Math.min(Math.max(Math.ceil(Math.sqrt(n)) + 1, 6), 14);
+  const bw = (hi - lo) / B;
+  const bins = Array.from({ length: B }, (_, i) => ({ x0: lo + i * bw, x1: lo + (i + 1) * bw, c: 0 }));
+  vals.forEach((v) => { const i = Math.min(B - 1, Math.max(0, Math.floor((v - lo) / bw))); bins[i].c++; });
+  const maxCount = Math.max(1, ...bins.map((b) => b.c));
+
+  // Densité lissée (KDE Silverman), exprimée en « biens attendus par tranche »
+  // pour partager l'axe Y avec l'histogramme.
   const mean = vals.reduce((a, b) => a + b, 0) / (n || 1);
-  const variance = n > 1 ? vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1) : 0;
-  const std = Math.sqrt(variance);
+  const std = n > 1 ? Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / (n - 1)) : 0;
   const showCurve = n >= 4 && std > 0;
-  const h = showCurve ? 1.06 * std * Math.pow(n, -1 / 5) || 1 : 1;
+  const h = 1.06 * std * Math.pow(n, -1 / 5) || 1;
+  const K = 120;
+  const curve = Array.from({ length: K + 1 }, (_, i) => {
+    const x = lo + (i / K) * (hi - lo);
+    const dens = vals.reduce((s, vi) => s + gauss((x - vi) / h), 0) / (n * h);
+    return { x, y: dens * n * bw };
+  });
+  const yMax = Math.max(maxCount, showCurve ? Math.max(...curve.map((p) => p.y)) : 0) * 1.12;
 
-  const K = 100;
-  const xs = Array.from({ length: K + 1 }, (_, i) => lo + (i / K) * (hi - lo));
-  const dens = xs.map((x) => vals.reduce((s, vi) => s + gaussianKernel((x - vi) / h), 0) / (n * h));
-  const maxD = Math.max(...dens, 1e-9);
-  const curveH = baseY - topY;
-  const yOf = (dval: number) => baseY - (dval / maxD) * curveH;
-
-  const areaPath = showCurve
-    ? `M ${sx(xs[0]).toFixed(1)} ${baseY} ` +
-      xs.map((x, i) => `L ${sx(x).toFixed(1)} ${yOf(dens[i]).toFixed(1)}`).join(" ") +
-      ` L ${sx(xs[xs.length - 1]).toFixed(1)} ${baseY} Z`
-    : "";
-
-  // Hauteur de la courbe à une abscisse (pour ancrer les traits verticaux).
-  const curveYAt = (v: number) => {
-    if (!showCurve) return topY + curveH * 0.35;
-    const dv = vals.reduce((s, vi) => s + gaussianKernel((v - vi) / h), 0) / (n * h);
-    return yOf(dv);
-  };
+  const xScale = scaleLinear({ domain: [lo, hi], range: [0, iw] });
+  const yScale = scaleLinear({ domain: [0, yMax], range: [ih, 0], nice: true });
 
   const accent = "var(--ds-accent)";
   const accentInk = "var(--ds-accent-ink)";
   const ink = "var(--ds-ink)";
   const inkSoft = "var(--ds-ink-soft)";
+  const line2 = "var(--ds-line-2)";
 
-  // Étiquettes d'axe (valeur + clé) ; extrêmes ancrés aux bords.
-  // Médiane volontairement absente de l'axe : elle a déjà son label en haut.
-  const axis: { v: number; k: string; anchor: "start" | "middle" | "end" }[] = [
-    { v: q.min, k: "Min", anchor: "start" },
-    { v: q.p25, k: "P25", anchor: "middle" },
-    { v: q.p75, k: "P75", anchor: "middle" },
-    { v: q.max, k: "Max", anchor: "end" },
-  ];
+  const kEur = (v: number) => `${Math.round(v / 100) / 10}k`;
+
+  // Étiquette de valeur (petit cartouche) au sommet d'un trait vertical.
+  const Tag = ({ x, label, value, color, dy = 0 }: { x: number; label: string; value: string; color: string; dy?: number }) => (
+    <g transform={`translate(${x}, ${-26 + dy})`}>
+      <text textAnchor="middle" fontSize={10} fontWeight={700} fill={inkSoft}
+        style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</text>
+      <text y={14} textAnchor="middle" fontSize={13} fontWeight={800} fill={color}
+        style={{ fontVariantNumeric: "tabular-nums" }}>{value}</text>
+    </g>
+  );
+
+  // Si médiane et réf signée sont proches, on décale le cartouche signé vers le haut.
+  const close = signed != null && Math.abs(xScale(q.median) - xScale(signed)) < 86;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img"
-      aria-label="Distribution des prix au m² affichés" style={{ display: "block", overflow: "visible" }}>
-      {/* Bande P25–P75 (moitié centrale) */}
-      <rect x={sx(q.p25)} y={topY} width={Math.max(0, sx(q.p75) - sx(q.p25))} height={baseY - topY}
-        fill={accent} opacity={0.1} />
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", height: "auto", overflow: "visible" }}
+      role="img" aria-label="Distribution des prix au m² affichés">
+      <Group left={m.left} top={m.top}>
+        <defs>
+          {/* Clip : la bande P25–P75 épouse la courbe au lieu d'être un rectangle. */}
+          <clipPath id="dc-iqr">
+            <rect x={xScale(q.p25)} y={0} width={Math.max(0, xScale(q.p75) - xScale(q.p25))} height={ih} />
+          </clipPath>
+        </defs>
 
-      {/* Densité empirique lissée */}
-      {showCurve && <path d={areaPath} fill={accent} opacity={0.16} stroke={accent} strokeWidth={1.5} />}
+        {/* Histogramme réel (comptes) */}
+        {bins.map((b, i) => {
+          const x = xScale(b.x0); const w = Math.max(0, xScale(b.x1) - xScale(b.x0) - 1.5);
+          const y = yScale(b.c);
+          return <Bar key={i} x={x} y={y} width={w} height={ih - y} fill={accent} opacity={0.16} rx={2} />;
+        })}
 
-      {/* Ligne de base */}
-      <line x1={mL} y1={baseY} x2={W - mR} y2={baseY} stroke="var(--ds-line-2)" strokeWidth={1} />
+        {/* Densité lissée + bande P25–P75 clippée sur la courbe */}
+        {showCurve && (
+          <>
+            <AreaClosed data={curve} x={(d) => xScale(d.x)} y={(d) => yScale(d.y)} yScale={yScale}
+              curve={curveBasis} fill={accent} fillOpacity={0.12} stroke={accent} strokeWidth={1.75} />
+            <g clipPath="url(#dc-iqr)">
+              <AreaClosed data={curve} x={(d) => xScale(d.x)} y={(d) => yScale(d.y)} yScale={yScale}
+                curve={curveBasis} fill={accent} fillOpacity={0.28} stroke="none" />
+            </g>
+          </>
+        )}
 
-      {/* Rug : un tick par comparable réel (montre le n) */}
-      {vals.map((v, i) => (
-        <line key={i} x1={sx(v)} y1={baseY} x2={sx(v)} y2={baseY + 7} stroke={inkSoft} strokeWidth={1.5} opacity={0.55} />
-      ))}
+        {/* Rug : un tick épais par comparable réel */}
+        {vals.map((v, i) => (
+          <line key={i} x1={xScale(v)} y1={ih} x2={xScale(v)} y2={ih - 11} stroke={accentInk} strokeWidth={2} opacity={0.85} />
+        ))}
 
-      {/* Médiane affichée */}
-      <line x1={sx(q.median)} y1={curveYAt(q.median) - 4} x2={sx(q.median)} y2={baseY} stroke={accentInk} strokeWidth={2} />
-      <g transform={`translate(${sx(q.median)}, ${topY - 30})`}>
-        <text textAnchor="middle" fontSize={12} fontWeight={700} fill={accentInk}>Médiane affichée</text>
-        <text y={15} textAnchor="middle" fontSize={14} fontWeight={800} fill={accentInk}>{fmt(q.median)}</text>
-      </g>
+        {/* Médiane affichée */}
+        <Line from={{ x: xScale(q.median), y: 0 }} to={{ x: xScale(q.median), y: ih }} stroke={accentInk} strokeWidth={2} />
+        <Tag x={xScale(q.median)} label="Médiane" value={fmt(q.median)} color={accentInk} />
 
-      {/* Référence Observatoire (prix signé) */}
-      {signed != null && (
-        <>
-          <line x1={sx(signed)} y1={topY - 6} x2={sx(signed)} y2={baseY} stroke={ink} strokeWidth={1.6} strokeDasharray="4 3" />
-          {/* Label sous l'axe, sur sa propre ligne (évite la collision P25/Méd.) */}
-          <g transform={`translate(${sx(signed)}, ${baseY + 52})`}>
-            <text textAnchor="middle" fontSize={11} fontWeight={700} fill={ink}>Signé · Observatoire</text>
-            <text y={14} textAnchor="middle" fontSize={13} fontWeight={800} fill={ink}>{fmt(signed)}</text>
-          </g>
-        </>
-      )}
+        {/* Référence Observatoire (prix signé) */}
+        {signed != null && (
+          <>
+            <Line from={{ x: xScale(signed), y: 0 }} to={{ x: xScale(signed), y: ih }} stroke={ink} strokeWidth={1.6} strokeDasharray="5 3" />
+            <Tag x={xScale(signed)} label="Signé" value={fmt(signed)} color={ink} dy={close ? -34 : 0} />
+          </>
+        )}
 
-      {/* Étiquettes d'axe min/P25/méd/P75/max */}
-      {axis.map((a, i) => (
-        <g key={i} transform={`translate(${sx(a.v)}, ${baseY + 22})`}>
-          <text textAnchor={a.anchor} fontSize={12} fontWeight={700} fill={ink} style={{ fontVariantNumeric: "tabular-nums" }}>{fmt(a.v)}</text>
-          <text y={14} textAnchor={a.anchor} fontSize={10} fontWeight={700} fill={inkSoft}
-            style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{a.k}</text>
-        </g>
-      ))}
+        {/* Axes */}
+        <AxisLeft scale={yScale} numTicks={4} hideAxisLine tickStroke={line2}
+          tickLabelProps={() => ({ fill: inkSoft, fontSize: 11, textAnchor: "end", dx: -2, dy: 3 })}
+          label="Nombre de biens" labelProps={{ fill: inkSoft, fontSize: 11, fontWeight: 700, textAnchor: "middle" }} labelOffset={28} />
+        <AxisBottom scale={xScale} top={ih} numTicks={6} stroke={line2} tickStroke={line2}
+          tickFormat={(v) => kEur(v as number)}
+          tickLabelProps={() => ({ fill: ink, fontSize: 11, fontWeight: 600, textAnchor: "middle", dy: 2 })}
+          label="Prix affiché (€/m²)" labelProps={{ fill: inkSoft, fontSize: 11, fontWeight: 700, textAnchor: "middle" }} labelOffset={22} />
 
-      {!showCurve && (
-        <text x={mL + plotW / 2} y={topY + 8} textAnchor="middle" fontSize={12} fontStyle="italic" fill={inkSoft}>
-          Trop peu de comparables pour une courbe fiable — points réels ci-dessous.
-        </text>
-      )}
+        {!showCurve && (
+          <text x={iw / 2} y={12} textAnchor="middle" fontSize={12} fontStyle="italic" fill={inkSoft}>
+            Trop peu de comparables pour une courbe fiable — histogramme et points réels seulement.
+          </text>
+        )}
+      </Group>
     </svg>
   );
 }
