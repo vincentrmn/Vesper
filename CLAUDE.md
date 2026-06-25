@@ -128,3 +128,37 @@ Pour une recherche (commune + critères), produire :
 ## 10. La question à se reposer en permanence
 
 *« Est-ce que ce chiffre, je le mettrais devant le client de Shawna ? »* Si la donnée est trop sale ou trop sparse pour ça → afficher la fourchette + la confiance basse, pas un faux prix précis. **La crédibilité de l'outil tient à ça.**
+
+---
+
+## 11. État & passation — session du 25/06/2026
+
+### Ce qui existe déjà dans ce repo (branche `claude/online-installation-setup-0lrgnw`)
+
+MVP Sextant bootstrappé **et testé de bout en bout** (Postgres local + données mock, `npm run build` OK), poussé sur la branche ci-dessus (pas encore mergé `main`, pas de PR) :
+
+- **Next.js 14 App Router** sous `src/`, **CSS maison** (`src/app/globals.css`) — design **recréé** faute d'accès à `scout`, **à remplacer par le design exact BBIscout** (cf. ci-dessous).
+- `src/lib/db.ts` — pool Postgres + `ensureSchema()` idempotent : tables `zones`, `listings`, `snapshots`, `observatoire`, `runs`.
+- `src/lib/athome.ts` — API suggest (seed géo) + normalisation listings atHome.
+- `src/lib/immotop.ts` — normalisation Immotop (isNew ignoré, pas de CPE).
+- `src/lib/dedup.ts` — dédup cross-source (lat/lng <150 m + surface ±2 + prix ±3 %, jamais intra-source). **À remplacer par le `lib/dedup.ts` exact de BBIscout.**
+- `src/lib/observatoire.ts` — décote affiché→signé + garde-fou comps aberrants.
+- `src/lib/stats.ts` — distribution + fourchette + confiance.
+- `src/lib/search.ts` — service produit (comparables → dédup → distribution → Observatoire → fourchette).
+- Routes : `/api/ingest`, `/api/seed`, `/api/zones`, `/api/search`.
+
+### ⚠️ À reprendre en priorité dans la nouvelle session (2 repos : `scout` + ce repo)
+
+1. **Pomper le design exact de BBIscout** : copier `scout/src/app/globals.css` + `layout.tsx` + CSS de composants (tableau, cards) → remplacer le design recréé. C'était la demande explicite de Vincent (« exactement le même design, tout pareil »).
+2. **Aligner le contrat d'ingestion sur BBIscout** (divergence à corriger, vu via les workflows n8n réels) :
+   - L'app appelle le **webhook n8n** (`N8N_WEBHOOK_URL`, path `scout-search`) avec le body : `{ runId, ingestUrl, ingestSecret, criteria }`.
+   - n8n re-poste vers `ingestUrl` : `{ runId, secret, listings }` — **le secret est dans le body**, pas en header `X-Ingest-Secret` (mon `/api/ingest` actuel attend un header → à réconcilier, garder UNE convention).
+   - `criteria` (shape canonique « zones model » BBInvest S2) : `{ locCodes: ["L10-belair", ...], propertyType: 'house'|undefined, surfaceMin, surfaceMax, priceMin, priceMax, bedroomsMin, cpeClasses: [...], keywords: [...] }`. atHome accepte `loc=L10-a,L10-b` nativement (codes joints par virgule).
+3. **Reprendre le scraper atHome BBIscout tel quel** (workflow n8n fourni) : GET SRP `https://www.athome.lu/srp/?tr=buy&ptypes=...&loc=...&old_build=true` → parse `window.__INITIAL_STATE__` (`state.search.list` + `state.search.listings` pour permalinks) → filtrer `isSoldProperty` et `isNewBuild` → **fiche détail en batch 1 req/2,5 s** pour extraire le CPE (regex « Classe énergétique [A-I] ») → agréger → POST ingest. `ptypes` appart = `flat,4,7,5,6,42,32,41,43` ; maison = `house`.
+   - **Pour Sextant** : NE PAS filtrer `isNewBuild` aveuglément (Sextant veut aussi du neuf comme comparable, avec garde-fou prix vs Observatoire), et étendre aux maisons + à toute la géo (BBIscout était Lux-Ville only).
+4. **Dépendances à pomper de BBIscout** (`package.json`) pour la Phase 4 export : `jspdf` + `jspdf-autotable` (PDF estimation client), `xlsx` (export Excel), `leaflet` + `@types/leaflet` (carte des comparables). Mon `package.json` ne les a pas encore.
+5. **Récupérer le scraper Immotop n8n** (non fourni dans l'upload — le prendre dans `scout`) + `docs/immotop-source2-etude.md`.
+
+### Contraintes d'infra connues (rappel)
+- atHome/Immotop **bloqués par la policy réseau** de l'environnement de dev → le seed géo et les scrapes se lancent **depuis Railway/n8n**, pas depuis la session Claude.
+- Railway déploie sur push `main`. Variables : cf. §7 + `INGEST_SECRET`, `N8N_WEBHOOK_URL`, `N8N_IMMOTOP_WEBHOOK_URL`.
