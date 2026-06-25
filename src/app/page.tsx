@@ -72,18 +72,24 @@ function HypRow({ label, value }: { label: string; value: string }) {
 export default function Dashboard() {
   const [configs, setConfigs] = useState<Cfg[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  // `loaded` évite le flash de l'état vide tant que le fetch initial n'a pas répondu.
+  const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<number | null>(null);
   const [showRuns, setShowRuns] = useState(true);
   const [openCfg, setOpenCfg] = useState<Record<number, boolean>>({});
   const router = useRouter();
 
   async function load() {
-    const [c, r] = await Promise.all([
-      fetch("/api/configs").then((x) => x.json()),
-      fetch("/api/runs").then((x) => x.json()),
-    ]);
-    setConfigs(Array.isArray(c) ? c : []);
-    setRuns(Array.isArray(r) ? r : []);
+    try {
+      const [c, r] = await Promise.all([
+        fetch("/api/configs").then((x) => x.json()),
+        fetch("/api/runs").then((x) => x.json()),
+      ]);
+      setConfigs(Array.isArray(c) ? c : []);
+      setRuns(Array.isArray(r) ? r : []);
+    } finally {
+      setLoaded(true);
+    }
   }
   useEffect(() => {
     load();
@@ -130,7 +136,7 @@ export default function Dashboard() {
       </div>
 
       <div>
-        {configs.length === 0 && (
+        {loaded && configs.length === 0 && (
           <div className="ds-empty">
             <span className="ds-empty__title">Aucune recherche</span>
             <span className="ds-empty__hint">Crée ta première estimation pour scraper les comparables et lire le marché.</span>
@@ -190,7 +196,7 @@ export default function Dashboard() {
         </span>
         <span className="ds-rule" />
       </div>
-      {showRuns && runs.length === 0 && (
+      {showRuns && loaded && runs.length === 0 && (
         <div className="ds-empty"><span className="ds-empty__hint">Aucune estimation lancée pour l'instant.</span></div>
       )}
       {showRuns &&
