@@ -401,14 +401,19 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   .lightbox-nav.next { right: 6px; }
 
   /* Tableaux de biens -> cartes empilées (fini le scroll horizontal) */
-  .prop-table, .prop-table tbody, .prop-table tr, .prop-table td { display: block; width: 100%; }
+  .prop-table, .prop-table tbody, .prop-table td { display: block; width: 100%; }
   .prop-table thead { display: none; }
+  /* tr en colonne flex pour pouvoir réordonner : titre d'abord, puis la case
+     « Inclure » labellisée, puis les chiffres. */
   .prop-table tr {
+    display: flex; flex-direction: column; width: 100%;
     position: relative;
     border: 1px solid var(--line); border-radius: 12px;
     margin: 0 0 12px; padding: 12px 14px;
   }
-  .prop-table tr.detail-row { border: none; padding: 0; margin: -8px 0 12px; }
+  .prop-table .cell-main { order: -2; }
+  .prop-table .cell-study { order: -1; text-align: right; }
+  .prop-table tr.detail-row { display: block; border: none; padding: 0; margin: -8px 0 12px; }
   .prop-table td {
     border: none; position: relative;
     padding: 6px 0 6px 42%; text-align: right; min-height: 1.7em;
@@ -448,6 +453,13 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
   .dist-lab-v { font-size: 0.66rem; }
   .dist-lab-k { font-size: 0.56rem; }
   .analyse-factors { padding-left: 16px; }
+
+  /* Barre d'export : tout empilé. Options (Photos / Détails) l'une au-dessus de
+     l'autre ; boutons Excel/PDF pleine largeur côte à côte. */
+  .exp-head { flex-direction: column; align-items: stretch; }
+  .exp-opts { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .exp-actions { width: 100%; }
+  .exp-actions .exp-btn { flex: 1; justify-content: center; }
 }
 
 /* --------------------------------------------------------------------------
@@ -585,6 +597,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .analyse-note p { margin: 0 0 8px; font-size: 0.85rem; line-height: 1.6; color: var(--ink); }
 .analyse-factors { margin: 4px 0 10px; padding-left: 18px; }
 .analyse-factors li { font-size: 0.85rem; line-height: 1.6; margin-bottom: 6px; }
+
+/* Barre d'export : en-tête (options à gauche, boutons à droite). */
+.exp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; }
+.exp-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; flex: 1; }
+.exp-opt { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; color: var(--ink); cursor: pointer; }
+.exp-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+/* Case « inclure dans l'étude » : centrée dans sa colonne (desktop). */
+.cell-study { text-align: center; }
 
 /* Boutons export + barre de chargement. */
 .exp-btn { display: inline-flex; align-items: center; gap: 7px; }

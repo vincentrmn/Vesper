@@ -411,17 +411,17 @@ export default function RunPage({ params }: { params: { id: string } }) {
       {run?.status === "done" && (
         <>
           <div className="card" style={{ marginBottom: 16, padding: 0, overflow: "hidden" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px" }}>
-              <div className="row" style={{ alignItems: "center", gap: 16, flex: 1 }}>
+            <div className="exp-head">
+              <div className="exp-opts">
                 <strong style={{ fontSize: "0.9rem" }}>Exporter</strong>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: 0, fontWeight: 500, color: "var(--ink)", cursor: "pointer" }}>
+                <label className="exp-opt">
                   <input type="checkbox" checked={expPhotos} onChange={(e) => setExpPhotos(e.target.checked)} disabled={!!expBusy} /> Photos
                 </label>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, margin: 0, fontWeight: 500, color: "var(--ink)", cursor: "pointer" }}>
+                <label className="exp-opt">
                   <input type="checkbox" checked={expDetails} onChange={(e) => setExpDetails(e.target.checked)} disabled={!!expBusy} /> Détails (description)
                 </label>
               </div>
-              <div className="row" style={{ flex: "0 0 auto", gap: 8 }}>
+              <div className="exp-actions">
                 <button className="btn ghost exp-btn" onClick={() => doExport("xlsx")} disabled={!!expBusy}>
                   <ExcelIcon /> {expBusy === "xlsx" ? "Génération…" : "Excel"}
                 </button>
@@ -526,7 +526,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                               ▸
                             </button>
                           </td>
-                          <td style={{ textAlign: "center" }}>
+                          <td className="cell-study" data-label="Inclure">
                             <input
                               type="checkbox"
                               checked={!isExcl}
