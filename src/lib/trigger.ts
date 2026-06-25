@@ -28,9 +28,10 @@ export async function triggerRun(
   const locCodes: string[] = Array.isArray(criteria.locCodes) ? criteria.locCodes : [];
   let atHomeGeoOk = true;
   let quartierSlugs: string[] = [];
+  let communeNames: string[] = [];
   if (locCodes.length) {
-    const zonesRes = await pool.query<{ id: string; parent_id: string | null; loc_code: string; q_code: string | null }>(
-      `SELECT id, parent_id, loc_code, q_code FROM zones WHERE loc_code = ANY($1::text[])`,
+    const zonesRes = await pool.query<{ id: string; parent_id: string | null; loc_code: string; q_code: string | null; label: string }>(
+      `SELECT id, parent_id, loc_code, q_code, label FROM zones WHERE loc_code = ANY($1::text[])`,
       [locCodes]
     );
     const byLoc = new Map(zonesRes.rows.map((r) => [r.loc_code, r]));
@@ -40,6 +41,26 @@ export async function triggerRun(
     atHomeGeoOk = aligned.length > 0;
     const wholeCity = zonesRes.rows.some((z) => z.parent_id === null);
     quartierSlugs = wholeCity ? [] : zonesRes.rows.filter((z) => z.parent_id !== null).map((z) => z.id);
+
+    // Immotop : noms de communes (la commune de chaque zone recherchée).
+    // Le scraper immotop résout la géo via l'autocomplete sur ces noms.
+    const parentIds = Array.from(
+      new Set(zonesRes.rows.map((z) => z.parent_id).filter((p): p is string => !!p))
+    );
+    const parentLabels = new Map<string, string>();
+    if (parentIds.length) {
+      const pr = await pool.query<{ id: string; label: string }>(
+        `SELECT id, label FROM zones WHERE id = ANY($1::text[])`,
+        [parentIds]
+      );
+      pr.rows.forEach((r) => parentLabels.set(r.id, r.label));
+    }
+    const clean = (s: string) => s.replace(/\s*-\s*ville$/i, "").replace(/\s*\/.*$/, "").trim();
+    communeNames = Array.from(
+      new Set(
+        zonesRes.rows.map((z) => clean(z.parent_id ? parentLabels.get(z.parent_id) || z.label : z.label))
+      )
+    ).filter(Boolean);
   }
 
   // Sources demandées (défaut atHome) filtrées par disponibilité réelle.
@@ -101,9 +122,10 @@ export async function triggerRun(
       priceMin: criteria.priceMin,
       priceMax: criteria.priceMax,
       quartierSlugs,
+      communeNames,
       statoIds,
       energyId,
-      maxPages: 50,
+      maxPages: 30,
     };
     fetch(immotopWebhook!, {
       method: "POST",

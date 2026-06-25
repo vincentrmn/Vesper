@@ -11,3 +11,8 @@ Le JSON live est la source de vérité ; ces fichiers sont la trace versionnée.
 
 ## À faire
 - Scraper **Immotop** (api-next `search-list/listings`, cf. `docs/immotop-source2-etude.md`) → `N8N_IMMOTOP_WEBHOOK_URL`.
+
+## `vesper-immotop-scraper.sdk.js`
+- Workflow **`Vesper — Immotop scraper`**, id `zicBduU8x89HnZOD`, webhook **`vesper-immotop`**.
+- api-next immotop.lu : résout la géo par commune via `geography/autocomplete`, pagine `search-list/listings` (param **`path=/vente-appartements/<commune>/` requis** + Referer correspondant), normalise au shape `Listing` (photos `xxl`, `cpe:null`, `etat` depuis `ga4Condition`), POST `source:immotop` vers `/api/ingest`.
+- Testé en isolation (Bertrange : 25 comps normalisés). v1 = **appartements** (atHome couvre les maisons). `N8N_IMMOTOP_WEBHOOK_URL` → `.../webhook/vesper-immotop`.
