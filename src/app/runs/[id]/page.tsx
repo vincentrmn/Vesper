@@ -47,6 +47,18 @@ const eur = (n: number) => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d)
 const plur = (n: number) => (n > 1 ? "s" : "");
 
 const ETAT_LABEL: Record<string, string> = { a_renover: "À rénover", habitable: "Habitable", renove: "Rénové" };
+
+// Libellé d'affichage du bien : nom de l'annonce si présent, sinon un libellé
+// reconstruit (surface · chambres) — jamais l'id brut.
+function displayTitle(r: Comparable): string {
+  const t = (r.title || "").trim();
+  if (t && t.toLowerCase() !== String(r.id).toLowerCase() && !/^immotop-/.test(t)) return t;
+  const parts: string[] = [];
+  if (typeof r.surface === "number") parts.push(`${r.surface} m²`);
+  if (r.rooms) parts.push(`${r.rooms} ch.`);
+  return parts.length ? parts.join(" · ") : "Annonce";
+}
+
 function EtatBadge({ etat }: { etat?: string | null }) {
   if (!etat || !ETAT_LABEL[etat]) return null;
   return <span className={`etat-badge ${etat}`}>{ETAT_LABEL[etat]}</span>;
@@ -344,7 +356,7 @@ export default function RunPage({ params }: { params: { id: string } }) {
                           </td>
                           <td className="cell-main">
                             <a href={r.url} target="_blank" rel="noreferrer" style={isExcl ? { textDecoration: "line-through" } : undefined}>
-                              {r.title || r.id}
+                              {displayTitle(r)}
                             </a>
                             {sold && <span className="src-badge" style={{ background: "#fde2e2", color: "#a12020" }} title="Vendu / sous compromis">Vendu</span>}
                             {r.source === "both" && r.altUrl ? (
