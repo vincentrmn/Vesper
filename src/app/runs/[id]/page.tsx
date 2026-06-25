@@ -211,7 +211,7 @@ function Analyse({ est, comps, excludedCount }: { est: Estimate | null; comps: C
             <p className="ds-hint" style={{ marginTop: 14 }}>
               <strong>P25</strong> et <strong>P75</strong> = 1ᵉʳ et 3ᵉ quartiles : un quart des comparables sont sous P25,
               trois quarts sous P75. L'écart P25–P75 (la zone foncée) regroupe la <strong>moitié centrale</strong> des
-              biens — plus il est resserré, plus le marché local est homogène.
+              biens : plus il est resserré, plus le marché local est homogène.
             </p>
           </div>
 
