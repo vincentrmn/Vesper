@@ -44,6 +44,18 @@ export async function POST(req: NextRequest) {
     const towns: Town[] = Array.isArray(body?.towns) ? body.towns : [];
     if (!towns.length) return NextResponse.json({ error: "towns requis" }, { status: 400 });
 
+    // Bucket `urbandistricts` (niveau 7) de l'API suggest = la VRAIE commune, qui
+    // agrège toutes ses localités. Pour les communes fusionnées, le `town`
+    // (niveau 9) homonyme est un fantôme (0 annonce) ; le token qui renvoie les
+    // biens est celui de l'urbandistrict. On l'utilise donc en priorité comme
+    // q_code de commune. Optionnel (rétrocompat) : { slug -> hkey }.
+    const udTokenBySlug = new Map<string, string>();
+    const uds: Town[] = Array.isArray(body?.urbandistricts) ? body.urbandistricts : [];
+    for (const u of uds) {
+      const s = slugify(u.slug || u.name || "");
+      if (s && u.hkey) udTokenBySlug.set(s, u.hkey);
+    }
+
     // Luxembourg uniquement (le suggest renvoie aussi DE/BE/FR frontaliers).
     const lux = towns.filter(
       (t) => t && (t.levels?.L2 === "Luxembourg") && t.hkey && (t.slug || t.name)
@@ -89,12 +101,24 @@ export async function POST(req: NextRequest) {
       let order = 100;
       for (const t of communes) {
         const id = t.slug!;
-        if (existing.has(id)) continue;
         const loc = `L${t.level ?? 9}-${id}`;
+        // q_code commune = token urbandistrict (L7) si dispo, sinon le town (L9).
+        const qCode = udTokenBySlug.get(id) ?? t.hkey;
+        if (existing.has(id)) {
+          // Déjà présent : on corrige juste le q_code si un token L7 est fourni
+          // (jamais Lux-Ville, dont le token L9 fonctionne).
+          if (udTokenBySlug.has(id) && id !== "luxembourg") {
+            await client.query(
+              `UPDATE zones SET q_code = $2 WHERE id = $1 AND parent_id IS NULL AND q_code IS DISTINCT FROM $2`,
+              [id, qCode]
+            );
+          }
+          continue;
+        }
         const r = await client.query(
           `INSERT INTO zones (id, parent_id, label, loc_code, q_code, lat, lng, sort_order)
            VALUES ($1, NULL, $2, $3, $4, $5, $6, $7) ON CONFLICT (id) DO NOTHING`,
-          [id, t.name ?? id, loc, t.hkey, num(t.lat), num(t.lon), order++]
+          [id, t.name ?? id, loc, qCode, num(t.lat), num(t.lon), order++]
         );
         if (r.rowCount) {
           existing.add(id);
